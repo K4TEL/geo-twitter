@@ -250,7 +250,7 @@ class ModelTrainer():
         if self.prob:
             print(f"\tProbabilistic:\t-LLH Loss:\t{np.mean(val_metric[:, 1, 0], axis=0)}\tProbability:\t{np.mean(val_metric[:, 0, 1], axis=0)}")
 
-        result = ResultManager(self.data.val_df, self.val_feature, self.device, self.benchmark, self.scaled, self.prefix)
+        result = ResultManager(self.data.val_df, None, self.val_feature, self.device, self.benchmark, self.scaled, self.prefix)
         if self.prob:
             result.soft_outputs(prob_models)
         else:

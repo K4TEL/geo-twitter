@@ -39,7 +39,7 @@ loss_prob = "pos"  # all/pos
 loss_total = "mean"  # sum/mean/type
 
 outcomes = 5
-covariance = covariance_types[2]
+covariance = covariance_types[2]  # None/spher
 
 epochs = 3
 log_step = 10
@@ -62,7 +62,7 @@ def main():
     parser.add_argument('-n', '--nepochs', type=int, default=epochs, help='Number of epochs to train')
     parser.add_argument('-ss', '--skip', type=int, default=0, help='Number of dataset samples to skip')
 
-    parser.add_argument('-sc', '--scale_coord', action="store_false", help="Scale coordinates by 1e-2 (default: True)")
+    parser.add_argument('-sc', '--scale_coord', action="store_true", help="Keep coordinates unscaled (default: True)")
     parser.add_argument('-o', '--outcomes', type=int, default=outcomes, help="Number of outcomes (lomg, lat) per tweet")
     parser.add_argument('-c', '--covariance', type=str, default=covariance, help="Covariance matrix type")
     parser.add_argument('-nw', '--weighted', action="store_false", help="Weights of GMM are not equal (default: True)")

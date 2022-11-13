@@ -26,7 +26,7 @@ def metric_distance(true, points, size):
 
 
 class ResultManager():
-    def __init__(self, val_df, feature, device, model_benchmark, scaled, prefix=None):
+    def __init__(self, val_df, text, feature, device, model_benchmark, scaled, prefix=None):
         self.cluster = device.type == "cuda"
         self.feature = feature
         if prefix is None:
@@ -44,10 +44,6 @@ class ResultManager():
         self.outputs_map = self.model_bm.outputs_map
 
         self.prob = self.cov is not None
-        if self.outcomes > 1:
-            self.sort = "weight" if self.weighted else "dist"
-        else:
-            self.sort = None
 
         self.covariances = {'spher': 1,
                             'diag': 2,
@@ -63,11 +59,12 @@ class ResultManager():
             if self.prob:
                 self.pred_columns[f"O{i+1}_sigma"] = "str"
 
-
-        print(f"RESULT\tInitializing dataframe with {len(self.pred_columns)} columns for {self.outcomes} outcome(s)")
-        print(f"column tag:\ttype")
-        for key, value in self.pred_columns.items():
-            print(f"{key}:\t{value}")
+        self.text = text
+        if self.text is None:
+            print(f"RESULT\tInitializing dataframe with {len(self.pred_columns)} columns for {self.outcomes} outcome(s)")
+            print(f"column tag:\ttype")
+            for key, value in self.pred_columns.items():
+                print(f"{key}:\t{value}")
 
         if val_df is not None:
             val_df.reset_index(drop=True, inplace=True)
@@ -130,13 +127,10 @@ class ResultManager():
             self.weights = weights
         if self.prob:
             self.covs = covs
-            #self.covs = covs
-
 
         print(f"VAL\tLOAD\tDataset of {self.size} samples is loaded")
-
-        if sorting and self.sort:
-            self.sort_outcomes(self.sort)
+        if sorting:
+            self.sort_outcomes()
 
         if self.outcomes == 1:
             self.df["O1_point"] = sparse.coo_matrix(self.means, shape=(self.size, 2)).toarray().tolist()
@@ -173,7 +167,6 @@ class ResultManager():
         print(f"RESULT\tAdding metrics column(s) {', '.join(str(col) for col in metrics_df.columns.values.tolist())} to dataframe")
         self.df = pd.concat([self.df, metrics_df], axis=1)
 
-
     def spatial_metric(self, threshold=100, best=True):
         print("Calculating mean and median errors in km")
         if best and self.outcomes > 1:
@@ -209,8 +202,7 @@ class ResultManager():
         print(f"\tAccuracy (<100km): {round(acc, 2)}%\t- below threshold"
               f"\n\tAccuracy (<161km): {round(acc161, 2)}%\t- below threshold")
 
-        return aed, med, mse, acc, acc161
-
+        return aed, med, mse, mae, acc,acc161
 
     def prob_metric(self, best=True, n=100):
         print("Calculating mean and median errors for GMM")
@@ -236,8 +228,8 @@ class ResultManager():
 
                     cae[i, k] = np.mean(gaus_dist, axis=0) * weight
 
-                    sigma = covar[0, 0]
-                    error = np.sum((true - mean)**2)
+                    sigma = np.sqrt(covar[0, 0])
+                    error = np.sqrt(np.sum((true - mean)**2))
                     pra[i, k] = np.pi * sigma * crit_chi * weight
                     cov[i, k] = 1 if error/sigma <= crit_chi else 0
 
@@ -277,30 +269,55 @@ class ResultManager():
 
     def result_metrics(self, best=True, threshold=100):
         print(f"Calculating spatial {'and probabilistic ' if self.prob else ''}metrics for {self.size} result samples")
-        aed, med, mse, acc, acc161 = self.spatial_metric(threshold, best)
+        aed, med, mse, mae, acc, acc161 = self.spatial_metric(threshold, best)
+        spat_metric = [["Average SAE", aed],
+                      ["Median SAE", med],
+                      ["MSE", mse],
+                      ["MAE", mae],
+                      [f"Acc@{threshold}", acc],
+                      ["Acc@161", acc161]]
+
         if self.prob:
             acae, mcae, apra, mpra, cov = self.prob_metric(best)
+            prob_metric = [["Average CAE", acae],
+                           ["Median CAE", mcae],
+                           ["Average 95% PRA", apra],
+                           ["Median 95% PRA", mpra],
+                           ["PRA COVerage", cov]]
+        else:
+            prob_metric = []
 
-    def sort_outcomes(self, crit="weight"):
+        metric = spat_metric + prob_metric
+        self.performance_df = pd.DataFrame(metric, columns=["metric", "value"])
+
+        filename = f"results/val-data/{self.prefix}_metric_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
+
+        with open(filename, "w") as f:
+            self.performance_df.to_csv(f, index=False, sep="\t", mode="a")
+        print(f"VAL\tSAVE\tPerformance metrics of {self.size} samples are written to file: {filename}")
+
+    def sort_outcomes(self):
         if self.dists is None and self.true.size > 0:
             self.dists = self.distances(self.means)
 
-        crit = "dist" if not self.prob else crit
+        print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by probabilistic weights")
+        sort_indexes = np.argsort(self.weights, axis=1)
 
-        if crit == "dist":
-            print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by distances error")
-            sort_indexes = np.argsort(self.dists, axis=1)
-        elif crit == "weight":
-            print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by probabilistic weights")
-            sort_indexes = np.argsort(self.weights, axis=1)
+        if self.text:
+            self.means = self.means[0, sort_indexes[:, ::-1]]
+            if self.outcomes > 1:
+                self.weights = self.weights[0, sort_indexes[:, ::-1]]
+            if self.prob:
+                self.covs = self.covs[0, sort_indexes[:, ::-1]]
 
         for i in range(self.size):
-            index = sort_indexes[i] if crit == "dist" else sort_indexes[i][::-1]
-            self.dists[i, :] = self.dists[i, index]
+            index = sort_indexes[i][::-1]
             self.means[i, :] = self.means[i, index]
+            self.weights[i, :] = self.weights[i, index]
+            if self.dists is not None:
+                self.dists[i, :] = self.dists[i, index]
             if self.prob:
                 self.covs[i, :] = self.covs[i, index]
-                self.weights[i, :] = self.weights[i, index]
 
     def coord_outputs(self, predicted):
         self.means = np.multiply(predicted[:, self.outputs_map["coord"][0]:self.outputs_map["coord"][1]], 100) if self.scaled else predicted[:, self.outputs_map["coord"][0]:self.outputs_map["coord"][1]]
@@ -314,7 +331,7 @@ class ResultManager():
 
         if self.outcomes > 1:
             print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by distances error")
-            self.sort_outcomes(self.sort)
+            self.sort_outcomes()
 
         if self.df.size > 0:
             spat_df = pd.DataFrame({column: pd.Series(dtype=type) for column, type in self.pred_columns.items()})
@@ -368,8 +385,7 @@ class ResultManager():
 
         if self.outcomes > 1:
             self.weights = weights
-
-            self.sort_outcomes(self.sort)
+            self.sort_outcomes()
 
         if self.df.size > 0:
             prob_models_df = pd.DataFrame({column: pd.Series(dtype=type) for column, type in self.pred_columns.items()})

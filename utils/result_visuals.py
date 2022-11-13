@@ -5,8 +5,13 @@ from shapely.geometry import Point, LineString
 import geopy.distance
 import geopandas as gpd
 from geopandas import GeoDataFrame
+from matplotlib.patches import Ellipse, Rectangle
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
+import matplotlib.ticker as ticker
 from matplotlib.colors import ListedColormap, BoundaryNorm, LogNorm
 import seaborn as sns
 import plotly.graph_objects as go
@@ -228,6 +233,144 @@ class ResultVisuals():
 
         if save:
             filename = f"results/img/gaussian_sample_map_{self.prefix}_N{self.size}_{datetime.today().strftime('%Y-%m-%d')}.png"
+            plt.savefig(filename, dpi=300)
+            print(f"VAL\tSAVE\tGaussian model of {self.size} samples is drawn to file: {filename}")
+        if not self.cluster:
+            plt.show()
+
+    def text_map_result(self, index=0, save=True):
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(20, 15))
+
+        xmin, xmax = -180, 180
+        ymin, ymax = -90, 90
+        step_big = 45.
+        ticks_big_x, ticks_big_y = range(int(xmin), int(xmax), int(step_big)), \
+                                   range(int(ymin), int(ymax), int(step_big))
+        tick_labels_big_x, tick_labels_big_y = [str(x) for x in ticks_big_x], \
+                                               [str(y) for y in ticks_big_y]
+
+        ind = np.argwhere(np.round(self.manager.weights[index, :] * 100, 2) > 0)
+        significant = self.manager.means[index, ind].reshape(-1, 2)
+        margin_lon, margin_lat = 10, 5
+        min_lon, max_lon = min(significant[:, 0]) - margin_lon, max(significant[:, 0]) + margin_lon
+        min_lat, max_lat = min(significant[:, 1]) - margin_lat, max(significant[:, 1]) + margin_lat
+        step_zoom = 5.0
+        ticks_zoom_x, ticks_zoom_y = range(int(min_lon), int(max_lon), int(step_zoom)), \
+                                     range(int(min_lat), int(max_lat), int(step_zoom))
+        tick_labels_zoom_x, tick_labels_zoom_y = [str(x) for x in ticks_zoom_x], \
+                                                 [str(y) for y in ticks_zoom_y]
+
+        if self.prob:
+            xxb, yyb = np.mgrid[xmin:xmax:400j, ymin:ymax:400j]
+            XX_big = np.array([xxb.ravel(), yyb.ravel()]).T
+
+            xx, yy = np.mgrid[min_lon:max_lon:400j, min_lat:max_lat:400j]
+            XX_zoom = np.array([xx.ravel(), yy.ravel()]).T
+
+            if self.outcomes > 1:
+                gmm = get_gm_family(self.manager.means[index, :].reshape(self.outcomes, 2),
+                                    self.manager.covs[index, :].reshape(self.outcomes, 2, 2),
+                                    self.manager.weights[index, :].reshape(-1))
+                Z_big = gmm.log_prob(torch.from_numpy(XX_big)).numpy()
+                Z_zoom = gmm.log_prob(torch.from_numpy(XX_zoom)).numpy()
+            else:
+                gm = GaussianModel(self.manager.means[index, :].reshape(2),
+                                    self.manager.covs[index, :].reshape(2, 2))
+                Z_big = gm.log_prob(torch.from_numpy(XX_big)).numpy()
+                Z_zoom = gm.log_prob(torch.from_numpy(XX_zoom)).numpy()
+
+            Z_big, Z_zoom = Z_big.reshape(xx.shape), Z_zoom.reshape(xx.shape)
+            Zb_pdf, Zz_pdf = np.exp(Z_big), np.exp(Z_zoom)
+            zbmin, zzmin = np.min(Zb_pdf), np.min(Zz_pdf)
+            zbmax, zzmax = np.max(Zb_pdf), np.max(Zz_pdf)
+
+            # print(f"Big PDF:\tMin: {zbmin}\tMax: {zbmax}")
+            # print(f"Zoom PDF:\tMin: {zzmin}\tMax: {zzmax}")
+
+            Zb_pdf = np.ma.array(Zb_pdf, mask=Zb_pdf < 1e-5)
+            Zz_pdf = np.ma.array(Zz_pdf, mask=Zz_pdf < 1e-5)
+
+        ax_big = ax[0]
+
+        ax_big.set_xlim(xmin, xmax)
+        ax_big.set_ylim(ymin, ymax)
+
+        map_big = Basemap(ax=ax_big, projection='mill', resolution='l')
+        map_big.drawcoastlines(linewidth=0.5, color="black", zorder=2)
+        map_big.drawcountries(linewidth=0.7, color="black", zorder=3)
+        map_big.drawparallels(np.arange(ymin, ymax, step_big), labels=tick_labels_big_y)
+        map_big.drawmeridians(np.arange(xmin, xmax, step_big), labels=tick_labels_big_x)
+        map_big.drawmapboundary(fill_color='lightgrey', zorder=0)
+        map_big.fillcontinents(color='white', lake_color='lightgrey', zorder=1)
+
+        if self.prob:
+            contour_big = map_big.contourf(xxb, yyb, Zb_pdf, levels=np.linspace(zbmin, zbmax, 250),
+                                           cmap='Spectral_r', alpha=0.7, zorder=9, latlon=True)
+            plt.colorbar(contour_big, ax=ax_big, orientation="horizontal", pad=0.2)
+
+        if self.outcomes > 1:
+            for i in range(self.outcomes):
+                if np.round(self.manager.weights[index, i] * 100, 2) > 0:
+                    map_big.scatter(self.manager.means[index, i, 0],
+                                    self.manager.means[index, i, 1],
+                                    color=self.palette[i+1],
+                                    s=10 * self.manager.weights[index, i],
+                                    latlon=True,
+                                    zorder=9999)
+        else:
+            map_big.scatter(self.manager.means[index, 0],
+                            self.manager.means[index, 1],
+                            latlon=True,
+                            s=10, c="black", zorder=9999)
+
+        ax_zoom = ax[1]
+        ax_zoom.set_xlim(min_lon, max_lon)
+        ax_zoom.set_ylim(min_lat, max_lat)
+
+        map_zoom = Basemap(ax=ax_zoom, projection='mill',
+                            llcrnrlat = min_lat,
+                            llcrnrlon = min_lon,
+                            urcrnrlat = max_lat,
+                            urcrnrlon = max_lon, resolution='h')
+        map_zoom.drawcoastlines(linewidth=0.5, color="black", zorder=2)
+        map_zoom.drawcountries(linewidth=0.7, color="black", zorder=3)
+        map_zoom.drawmapboundary(fill_color='lightgrey', zorder=0)
+        map_zoom.drawparallels(np.arange(min_lat, max_lat, step_zoom), labels=tick_labels_zoom_y)
+        map_zoom.drawmeridians(np.arange(min_lon, max_lon, step_zoom), labels=tick_labels_zoom_x)
+        map_zoom.fillcontinents(color='white', lake_color='lightgrey', zorder=1)
+
+        if self.prob:
+            contour_zoom = map_zoom.contourf(xx, yy, Zz_pdf, levels=np.linspace(zzmin, zzmax, 250),
+                                             cmap='Spectral_r', alpha=0.7, zorder=9, latlon=True)
+            plt.colorbar(contour_zoom, ax=ax_zoom, orientation="horizontal", pad=0.2)
+
+        if self.outcomes > 1:
+            for i in range(self.outcomes):
+                if np.round(self.manager.weights[index, i] * 100, 2) > 0:
+                    map_zoom.scatter(self.manager.means[index, i, 0],
+                                     self.manager.means[index, i, 1],
+                                     latlon=True,
+                                     label=f"Out {i+1}: { ', '.join(map(str, self.manager.means[index, i]))} - {round(self.manager.weights[index, i] * 100, 2)}%",
+                                     color=self.palette[i+1],
+                                     s=10 * self.manager.weights[index, i],
+                                     zorder=9999)
+        else:
+            map_zoom.scatter(self.manager.means[index, 0],
+                             self.manager.means[index, 1],
+                             latlon=True,
+                             s=10, c="black", zorder=9999)
+
+        title = f'{self.prefix} - PDF contour of Gaussian Model with {self.outcomes} means - sample {index}'
+        if self.manager.text:
+            title += f"\nText: {self.manager.text}\n"
+        elif self.size > 0:
+            title += f"\nText: {self.manager.df.loc[self.manager.df.index[index], 'text']}\n"
+
+        plt.legend(loc='upper center', title="Predicted outcomes", bbox_to_anchor=(0.5, -0.1), fancybox=True, shadow=True)
+        plt.suptitle(title)
+
+        if save:
+            filename = f"results/img/text_map_{self.prefix}_{datetime.today().strftime('%Y-%m-%d')}.png"
             plt.savefig(filename, dpi=300)
             print(f"VAL\tSAVE\tGaussian model of {self.size} samples is drawn to file: {filename}")
         if not self.cluster:

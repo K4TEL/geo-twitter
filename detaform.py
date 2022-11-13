@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import string
+from sklearn.model_selection import train_test_split
 # df = pd.read_csv("datasets/full_text.txt",
 #                  delimiter="\t",
 #                  header=None,
@@ -14,9 +15,27 @@ import string
 # edf = df.sample(n=76000, random_state=42)
 # print(df.info())
 # print(len(edf['user'].unique()))
-# df['place'] = ''
-# df.drop('x', axis=1, inplace=True)
-#
+df = pd.read_json(path_or_buf="datasets/eisenstein.jsonl", lines=True)
+
+users = [y for x, y in df.groupby('user')]
+
+train_users, test_users = train_test_split(users, test_size=0.2, random_state=42)
+train_users, test_users = list(train_users), list(test_users)
+train_size, test_size = len(train_users), len(test_users)
+
+train_df = pd.concat(train_users)
+test_df = pd.concat(test_users)
+print(train_df.info())
+print(len(train_df['user'].unique()))
+print(test_df.info())
+print(len(test_df['user'].unique()))
+
+with open("datasets/eisenstein_train.jsonl", "w") as f:
+    train_df.to_json(f, orient='records', lines=True)
+with open("datasets/eisenstein_test.jsonl", "w") as f:
+    test_df.to_json(f, orient='records', lines=True)
+
+
 # print(len(df["user"].unique()))
 # df_by_user = pd.DataFrame(columns=["lon", "lat", "text", "user"])
 # df_by_user["user"] = df["user"].unique()
@@ -31,8 +50,7 @@ import string
 #
 # print(df)
 #
-# with open("datasets/eisenstein.jsonl", "w") as f:
-#     df.to_json(f, orient='records', lines=True)
+
 
 # def chunks(lst, n):
 #     """Yield successive n-sized chunks from lst."""
@@ -97,10 +115,10 @@ import string
 # print(count.max())
 
 
-df = pd.read_json(path_or_buf="results/val-data/U-NON-GEO+GEO-ONLY-O5-d-total_sum-mf_sum-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N100000_2022-10-29.jsonl", lines=True)
-df = df.drop(df.sample(n=99900, random_state=42).index, axis=0)
-with open("results/val-data/pmop-test.jsonl", "w") as f:
-    df.to_json(f, orient='records', lines=True)
+# df = pd.read_json(path_or_buf="results/val-data/U-NON-GEO+GEO-ONLY-O5-d-total_sum-mf_sum-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N100000_2022-10-29.jsonl", lines=True)
+# df = df.drop(df.sample(n=99900, random_state=42).index, axis=0)
+# with open("results/val-data/pmop-test.jsonl", "w") as f:
+#     df.to_json(f, orient='records', lines=True)
 
 # size = 300000
 # vs = 300000
