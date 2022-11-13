@@ -21,6 +21,9 @@ empty = "empty-twitter-example-big.jsonl"
 nlp_model = "en_core_web_sm"
 world_model = "naturalearth_lowres"
 
+# test run for NER + gazetteer approach
+
+
 def read_json(file):      
     print("=== Reading data from:", file)
     try:
@@ -31,6 +34,7 @@ def read_json(file):
         print("=== Can't read data from:", file)
     
     return df
+
 
 def coords_on_map(df, long="long", lat="lat", clr="red"):
     geometry = [Point(xy) for xy in zip(df[long], df[lat])]
@@ -43,7 +47,8 @@ def coords_on_map(df, long="long", lat="lat", clr="red"):
     marker='o', 
     color=clr, 
     markersize=5);
-    
+
+
 def lines_on_map(df, x1="long", y1="lat", x2="long_gc", y2="lat_gc", clr="red"):
     world_ax = gpd.read_file(gpd.datasets
                              .get_path(world_model)).plot(
@@ -65,7 +70,6 @@ def lines_on_map(df, x1="long", y1="lat", x2="long_gc", y2="lat_gc", clr="red"):
     gdf.plot(ax=world_ax, marker='o', color="green", markersize=10, zorder=2)
 
 
-    
 def spacy_ner(df):
     if not path.exists("model"):
         print("=== Local folder of NLP model not found. Downloading")
@@ -101,6 +105,7 @@ def spacy_ner(df):
                     
     return df
 
+
 def geocoding(df, city_country=True, coords=False):
     geolocator = Nominatim(user_agent="geoapiExercises")
     
@@ -123,7 +128,7 @@ def geocoding(df, city_country=True, coords=False):
                   "==> City:", row['city'], "Country:", row["country"])
         
         return row
-    
+
     def coords(row):
         try:
             location = geolocator.geocode(row['gpe'], timeout=None)
@@ -165,11 +170,13 @@ def geocoding(df, city_country=True, coords=False):
     
     return df
 
+
 def save_df(file, df):
     with open(file, "w") as f:
         df.to_json(f, orient='records', lines=True)
     print("=== Data saved to file", file)
-    
+
+
 def read_args(train=False, empty=False):
     try: # 1 arg - data imput 
       file = sys.argv[1]
@@ -194,7 +201,8 @@ def read_args(train=False, empty=False):
       empty_data = None
       
     return train_data, empty_data
-    
+
+
 def main():
     train_data, empty_data = read_args(True, False) # load train and empty set
     
@@ -239,6 +247,7 @@ def main():
     plt.show()
     
     lines_on_map(df)
-    
+
+
 if __name__ == "__main__":
     main()

@@ -3,11 +3,10 @@ import torch
 import numpy as np
 from pathlib import Path
 from utils.twitter_dataset import *
-from utils.regressor import *
-from utils.benchmarks import *
-from utils.result_manager import *
 from utils.result_visuals import *
 
+# single text prediction wrapper
+# preprocessing and result visual output
 
 class ModelOutput():
     def __init__(self, wrapper, model_prefix):

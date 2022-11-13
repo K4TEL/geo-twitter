@@ -9,6 +9,8 @@ from sklearn.model_selection import train_test_split
 import GPUtil
 import psutil
 
+# dataset wrapper
+
 
 def load_jsonl(filename):
     filename = f"datasets/{filename}"
@@ -30,6 +32,7 @@ def save_df(df, filename, prefix=None):
     print(f"DATASET\tSAVE\tTwitter Dataset of {size} samples is written to file: {filename}")
 
 
+# text preprocessing
 def nlp_filtering(text):
     def filter_punctuation(text):
         punctuationfree="".join([i for i in text if i not in string.punctuation])
@@ -47,13 +50,11 @@ def nlp_filtering(text):
 
 
 def create_dataloader(inputs, masks, labels, batch_size, shuffle=False):
-    # GPUtil.showUtilization()
-    # print(f"{psutil.virtual_memory().percent}%\t{round(psutil.virtual_memory().used/1024**3, 2)} GB\t{round(psutil.virtual_memory().free/1024**3, 2)} GB")
-    # print("dataloader")
     dataset = TensorDataset(torch.tensor(inputs), torch.tensor(masks), torch.tensor(labels))
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
+# crop dataset to remove already used data before random sampling
 def crop_dataset(data, size, seed):
     print(f"DATASET\tCropping dataset of {len(data.index)} in {size} samples with seed {seed}")
     return data.drop(data.sample(n=size, random_state=seed).index, axis=0)
@@ -98,6 +99,7 @@ class TwitterDataloader():
         self.val_dataloader, self.train_dataloader, self.test_dataloader = None, None, None
         self.val_df = None
 
+    # filtering dataset files by column condition
     def filter_dataset(self, column_name, filter_text=None, filter_list=None, save=True):
         if filter_text:
             filter_df = self.data[self.data[column_name] == filter_text]
@@ -109,13 +111,7 @@ class TwitterDataloader():
         if save:
             save_df(filter_df, self.filename, prefix)
 
-    def single_text(self, text, filtering=False):
-        if filtering:
-            text = nlp_filtering(text)
-
-        input_ids, attention_mask = self.tokenize(text)
-        return input_ids, attention_mask
-
+    # tokenization - text to IDs and attention masks
     def tokenize(self, column):
         encoded_corpus = self.tokenizer(text=column,
                                         add_special_tokens=True,
@@ -128,6 +124,7 @@ class TwitterDataloader():
         attention_masks = encoded_corpus['attention_mask']
         return input_ids, attention_masks
 
+    # forming feature columns, dropping old columns
     def feature_split_filter(self, data):
         text_features = self.features + [self.val_feature] if self.val_feature not in self.features else self.features
         for f in text_features:
@@ -158,6 +155,7 @@ class TwitterDataloader():
         self.val_df = self.feature_split_filter(self.val_df)
         self.create_feature_dataloaders(self.val_df, False, batch_size)
 
+    # training and evaluation dataloaders formation
     def create_feature_dataloaders(self, df, train, batch_size, shuffle=False, test_ratio=None):
         if train:
             train_index, test_index = train_test_split(df.index, test_size=test_ratio, random_state=self.seed)

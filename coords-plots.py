@@ -10,12 +10,14 @@ from matplotlib.patches import Ellipse
 from matplotlib.colors import LogNorm
 from sklearn.preprocessing import MinMaxScaler
 
+
 def load_jsonl(filename):
     filename = f"datasets/{filename}"
     print(f"DATASET\tLOAD\tLoading dataset from {filename}")
     data = pd.read_json(path_or_buf=filename, lines=True)
     print(f"DATASET\tLOAD\tDataset of {len(data.index)} coords is loaded")
     return data
+
 
 def save_df(data, filename):
     with open(filename, "w") as f:
@@ -41,6 +43,8 @@ def save_df(data, filename):
 # #plt.pcolormesh([x, y], dens_test, shading='auto')
 # #plt.show()
 
+
+# Kernel Density Estimation surface on map
 def kde(coords):
     x, y = coords["longitude"], coords["latitude"]
 
@@ -93,6 +97,8 @@ def kde(coords):
     print(f"VAL\tSAVE\tPlot of {len(f.index)} samples is drawn to file: {pic}")
     plt.show()
 
+
+# GMM clustering of point on the map
 def gmm(coords, peaks, seed):
     X = coords.to_numpy(dtype=float)
     xmin, xmax = -180., 180.
@@ -133,6 +139,8 @@ def gmm(coords, peaks, seed):
     plt.ylabel('Latitude')
     plt.show()
 
+
+# BIC and AIC criterion for GMMs of different peaks number
 def gmm_crit(coords, start, end, step, seed):
     X = coords.to_numpy(dtype=float)
 
@@ -157,6 +165,8 @@ def gmm_crit(coords, start, end, step, seed):
     f = f"results/img/gmm.png"
     plt.savefig(f)
 
+
+# write GMM to jsonl file
 def save_gmm(gmm, filename):
     gmm_df = pd.DataFrame(columns=["weights", "means", "covariances", "precisions", "precisions_cholesky"])
     gmm_df[["means", "covariances", "precisions", "precisions_cholesky"]] = gmm_df[["means", "covariances", "precisions", "precisions_cholesky"]].astype(object)
@@ -179,6 +189,8 @@ def save_gmm(gmm, filename):
         gmm_df.to_json(f, orient='records', lines=True)
     print(f"PARAM\tSAVE\tParameters for GMM with {len(gmm_df.index)} means are written to file: {filename}")
 
+
+# read GMM from jsonl file
 def load_gmm(filename):
     data = pd.read_json(path_or_buf=filename, lines=True)
     #print(data)
@@ -208,6 +220,8 @@ def load_gmm(filename):
     print(f"MODEL\tSET\tParameters of GMM with {len(data.index)} means are set")
     return gmm
 
+
+# GMM clustering of point on the map
 def plot_gmm(gmm, coords):
     X = coords.to_numpy(dtype=float)
     xmin, xmax = -180., 180.
@@ -248,6 +262,8 @@ def plot_gmm(gmm, coords):
     f = f"results/img/gmm_plot.png"
     plt.savefig(f)
 
+
+# fitting GMM to coords data
 def calc_gmm(coords, peaks, seed, iter, gmm_filename):
     X = coords.to_numpy(dtype=float)
     print(f"Calculating GMM with {peaks} means for max {iter} iterations")
@@ -259,6 +275,8 @@ def calc_gmm(coords, peaks, seed, iter, gmm_filename):
                        random_state=seed).fit(X)
     save_gmm(gmm, gmm_filename)
 
+
+# fitting Bayesian GMM to coords data
 def calc_bgmm(coords, peaks, seed, iter, bgmm_filename):
     X = coords.to_numpy(dtype=float)
     print(f"Calculating BGMM with {peaks} means for max {iter} iterations")
@@ -270,6 +288,8 @@ def calc_bgmm(coords, peaks, seed, iter, bgmm_filename):
                                random_state=seed).fit(X)
     save_gmm(bgmm, bgmm_filename)
 
+
+# generate grid by number of steps
 def map_grid(peaks, step=200):
     xmin, xmax = -180, 180
     ymin, ymax = -90, 90
@@ -283,6 +303,8 @@ def map_grid(peaks, step=200):
     #xx, yy = np.meshgrid(peaks[:, 0], peaks[:, 1])
     return xx, yy
 
+
+# GMM likelihood score surface plot on the map (shifted to min as 0)
 def gmm_likelihood(gmm):
     xx, yy = map_grid(gmm.means_, 100)
     XX = np.array([xx.ravel(), yy.ravel()]).T
@@ -343,6 +365,8 @@ def gmm_likelihood(gmm):
     print(f"PLOT\tSAVE\tPlot of GMM likelihood for {len(XX)} points is drawn to file: {pic}")
     plt.show()
 
+
+# GMM PDF surface plot on the map
 def gmm_density(gmm):
     xmin, xmax = -180, 180
     ymin, ymax = -90, 90
@@ -396,6 +420,8 @@ def gmm_density(gmm):
     print(f"PLOT\tSAVE\tPlot of GMM probability for {len(XX)} points is drawn to file: {pic}")
     plt.show()
 
+
+# GMM PDF contour plot on the map
 def gmm_contour(gmm):
     xmin, xmax = -180, 180
     ymin, ymax = -90, 90
@@ -437,6 +463,7 @@ def gmm_contour(gmm):
 
     plt.show()
 
+
 filename = "twitter-2020-02-28.txt"
 world = "map-world/world-twitter-2022-coords.jsonl"
 kde_results = "kde_world_2022.jsonl"
@@ -467,35 +494,37 @@ X = coords[["longitude", "latitude"]].to_numpy(dtype=float)
 # gmm_density(gmm)
 # gmm_contour(gmm)
 
-from scipy.linalg import cholesky
-
-cov = "spherical"
-gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
-print(cov)
-print(gmm.covariances_)
-print(gmm.precisions_)
-print(gmm.precisions_cholesky_)
-print(cholesky(gmm.covariances_))
-
-cov = "diag"
-gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
-print(cov)
-print(gmm.covariances_)
-print(gmm.precisions_)
-print(gmm.precisions_cholesky_)
-
-cov = "full"
-gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
-print(cov)
-print(gmm.covariances_)
-print(gmm.precisions_)
-print(gmm.precisions_cholesky_)
-
-cov = "tied"
-gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
-print(cov)
-print(gmm.covariances_)
-print(gmm.precisions_)
-print(gmm.precisions_cholesky_)
 
 
+# test for differences in covariance
+#
+# from scipy.linalg import cholesky
+#
+# cov = "spherical"
+# gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
+# print(cov)
+# print(gmm.covariances_)
+# print(gmm.precisions_)
+# print(gmm.precisions_cholesky_)
+# print(cholesky(gmm.covariances_))
+#
+# cov = "diag"
+# gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
+# print(cov)
+# print(gmm.covariances_)
+# print(gmm.precisions_)
+# print(gmm.precisions_cholesky_)
+#
+# cov = "full"
+# gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
+# print(cov)
+# print(gmm.covariances_)
+# print(gmm.precisions_)
+# print(gmm.precisions_cholesky_)
+#
+# cov = "tied"
+# gmm = GaussianMixture(5, covariance_type=cov, max_iter=1).fit(X)
+# print(cov)
+# print(gmm.covariances_)
+# print(gmm.precisions_)
+# print(gmm.precisions_cholesky_)

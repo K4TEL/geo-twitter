@@ -3,6 +3,10 @@ from math import log, cos, pi, floor
 
 from torch.optim.lr_scheduler import _LRScheduler
 
+# cosine scheduler fpr learning rate during training
+# source code: https://github.com/abhuse/cyclic-cosine-decay
+# author: @abhuse
+
 
 class CyclicCosineDecayLR(_LRScheduler):
     def __init__(self,

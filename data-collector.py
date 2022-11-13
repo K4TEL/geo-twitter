@@ -3,16 +3,13 @@ import sys
 import pandas as pd
 import os, glob
 
-input_file = '/run/user/1005618/gvfs/smb-share:server=archive3.ist.local,share=group/chlgrp/twitter-collection-2022/twitter-2022-01-25.txt'
-output_file = "datasets/"
-
-country_codes = ["CA", "GB", "FR"]
 
 def parse_geo(obj):
     print(obj['coordinates']["coordinates"])
     coord_long = obj['coordinates']["coordinates"][0]
     coord_lat = obj['coordinates']["coordinates"][1]
     return coord_long,coord_lat
+
 
 def parse_user(obj):
     location = obj['user']['location'] if obj["user"]["location"] else ""
@@ -21,6 +18,7 @@ def parse_user(obj):
     description = obj['user']['description'] if obj["user"]["description"] else ""
     user = f"{username} {screen} {description} {location}"
     return user
+
 
 def parse_place(obj):
     full = obj['place']['full_name'] if obj['place']['full_name'] else ""
@@ -31,11 +29,13 @@ def parse_place(obj):
     place = f"{country} {type} {name} {full} {code}"
     return place, code
 
+
 def parse_tweet(obj):
     text = obj['text']
     time = obj['created_at']
     lang = obj['lang'] if obj['lang'] else ""
     return text, time, lang
+
 
 def parse_train(fid):
     known_ids = set()
@@ -92,6 +92,7 @@ def parse_train(fid):
 
         yield (long, lat, text, time, lang, code, place, user)
 
+
 def read_train(filename):
     print("Reading data from:", filename)
     with open(filename, encoding='utf-8') as fid:
@@ -113,10 +114,12 @@ def read_train(filename):
 
     return pd.DataFrame(data_geo)
 
+
 def write_records(file, df):
     with open(file, "w") as f:
         df.to_json(f, orient='records', lines=True)
     print("Data written to file:", file)
+
 
 def combine(file):
     os.chdir(os.path.dirname(__file__) + r"/filtered_json")
@@ -132,21 +135,27 @@ def combine(file):
         combined_txt.to_json(file, orient='records', lines=True)
     print(f"Data from {len(all_filenames)} files written to common dataset: {file}")
 
-def main():
-    try: # 1 arg - data input
+
+test_input_file = '/run/user/1005618/gvfs/smb-share:server=archive3.ist.local,share=group/chlgrp/twitter-collection-2022/twitter-2022-01-25.txt'
+output_folder = "datasets/"
+
+
+def main(concat_to_one=False):
+    try:  # 1 arg - data input (txt)
         filename = sys.argv[1]
     except IndexError:
-        filename = input_file
+        filename = test_input_file
     print(f"Input file: {filename}")
 
-    try: # 2 arg - filtered data output
-      output_filename = sys.argv[2]
+    try:  # 2 arg - filtered data output (jsonl)
+        output_filename = sys.argv[2]
     except IndexError:
-      head, tail = os.path.split(filename)
-      output_filename = output_file + tail
-      open(output_filename, 'w').close()
+        head, tail = os.path.split(filename)
+        output_filename = output_folder + tail
+        open(output_filename, 'w').close()  # if not exists
     print(f"Output file: {output_filename}")
 
+    # manual testing
     # df_geo = read_train(filename)
     # write_records(output_filename, df_geo)
 
@@ -156,7 +165,9 @@ def main():
     except Exception as e:
         print("Couldn't form dataset:", e)
 
-    #combine("ca-twitter-2022.jsonl")
+    if concat_to_one:  # if all .txt per-day files are parsed - combine to single json
+        combine("ca-twitter-2022.jsonl")
+
 
 if __name__ == "__main__":
     main()

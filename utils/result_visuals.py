@@ -1,11 +1,5 @@
 import pandas as pd
 import numpy as np
-from geopy import distance
-from shapely.geometry import Point, LineString
-import geopy.distance
-import geopandas as gpd
-from geopandas import GeoDataFrame
-from matplotlib.patches import Ellipse, Rectangle
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -35,14 +29,17 @@ from utils.benchmarks import *
 from utils.result_manager import *
 
 
+# GM/GMM
 def GaussianModel(means, sigma):
     return dist.MultivariateNormal(torch.from_numpy(means), torch.from_numpy(sigma))
 
 
+# GMM weights
 def GaussianWeights(weights):
     return dist.Categorical(torch.from_numpy(weights))
 
 
+# GMM complete
 def get_gm_family(means, sigma, weights):
     gaussian = GaussianModel(means, sigma)
     gmm_weights = GaussianWeights(weights)
@@ -70,21 +67,23 @@ class ResultVisuals():
 
         self.covariances = self.manager.covariances
 
+        # palette for sorted by weight outcomes
         self.palette = {1: 'darkgreen',
                         2: 'goldenrod',
                         3: 'darkorange',
                         4: 'crimson',
                         5: 'darkred'}
 
-        self.zorder = {'XS': 5,
-                       'S': 4,
-                       'M': 3,
-                       'L': 2,
-                       'XL': 1}
+        # self.zorder = {'XS': 5,
+        #                'S': 4,
+        #                'M': 3,
+        #                'L': 2,
+        #                'XL': 1}
 
-        self.world_model = "naturalearth_lowres"
-        self.city_model = "naturalearth_cities"
+        # self.world_model = "naturalearth_lowres"
+        # self.city_model = "naturalearth_cities"
 
+    # multiple tweets GMM NLLH contour on the map
     def prob_map_animation(self, frames=42, gif=False, clean=True, video=True):
         frames = self.size if frames > self.size else frames
         xmin, xmax = -180, 180
@@ -170,6 +169,7 @@ class ResultVisuals():
             print(f"VAL\tRemoving {frames} gaussian plot frames")
             shutil.rmtree(f"./{frame_dir}", ignore_errors=True)
 
+    # single tweet GMM NLLH contour on the map
     def gaus_map(self, index=42, save=True):
         xmin, xmax = -180, 180
         ymin, ymax = -90, 90
@@ -238,6 +238,7 @@ class ResultVisuals():
         if not self.cluster:
             plt.show()
 
+    # single text results visualization on the map
     def text_map_result(self, index=0, save=True):
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(20, 15))
 
@@ -376,6 +377,7 @@ class ResultVisuals():
         if not self.cluster:
             plt.show()
 
+    # Densities on log scale per outcome
     def density(self, save=True):
         fig, ax = plt.subplots(figsize=(20, 10))
         ax.set(xscale="log")
@@ -388,13 +390,6 @@ class ResultVisuals():
 
             sns.kdeplot(self.df[f'O{i+1}_dist'], ax=ax, label=label, bw_adjust=.5,
                          color=self.palette[i+1], linewidth=2, fill=True, alpha=0.1)
-
-            #self.df[f'O{i+1}_dist'].plot.kde(color=self.palette[i+1], label=label, ax=ax, ind=self.size)
-
-            # peak = self.df[f'O{i+1}_dist'].median()
-            # plt.axvline(peak, color=self.palette[i+1], linestyle='--', lw=1)
-            # ymin, ymax = ax.get_ylim()
-            # plt.text(peak, ymax, f"{round(peak, 2)}km", color=self.palette[i+1], fontweight="bold")
 
         box = ax.get_position()
         ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
@@ -410,6 +405,7 @@ class ResultVisuals():
         if not self.cluster:
             plt.show()
 
+    # Cumulative Distribution per outcome
     def cum_dist(self, best=True, threshold=200, save=True):
         fig, ax = plt.subplots(figsize=(20, 10))
         ax.set(xscale="log")
@@ -474,6 +470,7 @@ class ResultVisuals():
         if not self.cluster:
             plt.show()
 
+    # distance error lines on the map
     def interact_lines(self, size=500, scope="world", save=True):
         self.df = self.df.sample(n=size, random_state=42, ignore_index=True)
         self.size = len(self.df.index)

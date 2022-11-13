@@ -1,12 +1,13 @@
 import math
-
 import torch
 import torch.distributions as dist
 import numpy as np
-
 from utils.regressor import *
 
+# model benchmarks for loss and metrics
 
+
+# R2 score
 def r2_score(X, Y):
     labels_mean = torch.mean(Y)
     ss_tot = torch.sum((Y - labels_mean) ** 2)
@@ -15,12 +16,14 @@ def r2_score(X, Y):
     return r2
 
 
+# spher cov from raw outputs
 def spher_sigma(X, outcomes, outputs_map, lower_limit=0):
     softplus = nn.Softplus()
     S = softplus(X[:, outputs_map["sigma"][0]:outputs_map["sigma"][1]]) + lower_limit
     return S.reshape([X.size(dim=0), outcomes])
 
 
+# GM/GMM from raw outputs
 def GaussianModel(X, outcomes, outputs_map, prob_domain, cov):
     softplus = nn.Softplus()
     batch = X.size(dim=0)
@@ -60,6 +63,7 @@ def GaussianModel(X, outcomes, outputs_map, prob_domain, cov):
     return gaussian
 
 
+# GMM weights from raw outputs
 def GaussianWeights(X, outcomes, outputs_map):
     softmax = nn.Softmax(dim=1)
     weights = X[:, outputs_map["weight"][0]:outputs_map["weight"][1]].reshape([X.size(dim=0), outcomes]) if outputs_map["weight"] else torch.ones((X.size(dim=0), outcomes), device=X.device)
@@ -67,12 +71,14 @@ def GaussianWeights(X, outcomes, outputs_map):
     return gmm_weights
 
 
+# spatial weights from raw outputs
 def weights(X, outcomes, outputs_map):
     softmax = nn.Softmax(dim=1)
     W = X[:, outputs_map["weight"][0]:outputs_map["weight"][1]].reshape([X.size(dim=0), outcomes]) if outputs_map["weight"] else torch.ones((X.size(dim=0), outcomes), device=X.device)
     return softmax(W)
 
 
+# Distance^2 to genuine truth from raw outputs
 def dist2(X, y, outcomes, outputs_map):
     def coord_se(X, y, outcomes):
         error_by_coord = nn.MSELoss(reduction='none')
@@ -87,6 +93,7 @@ def dist2(X, y, outcomes, outputs_map):
     return D
 
 
+# Negative Log Likelihood fit for genuine truth from raw outputs
 def lh_loss(X, y, outcomes, outputs_map, prob_domain):
     gaussian = GaussianModel(X, outcomes, outputs_map, prob_domain, "spher")
     if outcomes > 1:
@@ -98,6 +105,7 @@ def lh_loss(X, y, outcomes, outputs_map, prob_domain):
     return L
 
 
+# weighted D2 loss from raw outputs
 def d_loss(X, y, outcomes, outputs_map):
     D = dist2(X, y, outcomes, outputs_map)
     if outcomes > 1:
@@ -183,6 +191,7 @@ class ModelBenchmark():
             total_loss = all_features_loss[1 if self.outputs_map["sigma"] else 0]
         return total_loss
 
+    # pytorch GM/GMM from raw outputs
     def prob_models(self, outputs):
         X = outputs.squeeze().float()
 
@@ -196,6 +205,7 @@ class ModelBenchmark():
         else:
             return gaussian
 
+    # spat and prob loss from raw outputs
     def result_metrics(self, outputs, labels):
         X = outputs.squeeze().float()
         y = labels.squeeze().float()
@@ -219,6 +229,7 @@ class ModelBenchmark():
         r2 = r2_score(X, Y)
         return r2
 
+    # tensorboard metrics logging
     def log(self, writer, step, lr, train_metric, cur_batch, val_metric=None):
         def total_loss_log(metric, metric_type="total"):
             if metric_type == "val":

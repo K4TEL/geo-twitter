@@ -1,6 +1,10 @@
 import torch.nn as nn
 from transformers import BertModel, PreTrainedModel, AutoConfig, PretrainedConfig
 
+# model wrapper
+# linear regression fork for features and preset outputs
+
+
 class BERTregModel():
     def __init__(self, n_outcomes=1, covariance=None, weighted=False, features=None, model_name=None):
         self.n_outcomes = n_outcomes
@@ -73,6 +77,8 @@ class BertRegressor(nn.Module):
             outputs = self.minor_regressor(outputs[1])
         return outputs
 
+# hugging faces framework version for uploading
+#
 # class BertRegressorConfig(PretrainedConfig):
 #     def __init__(self, **kwargs):
 #         super(BertRegressorConfig, self).__init__(**kwargs)

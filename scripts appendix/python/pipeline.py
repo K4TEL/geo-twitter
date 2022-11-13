@@ -1,10 +1,14 @@
 from transformers import TrainingArguments, pipeline, BertTokenizer, Trainer
 import torch
 from utils.regressor import *
+from transformers import Pipeline
 
 base_model = "bert-base-multilingual-cased"
 local_model = "U-NON-GEO+GEO-ONLY-O1-d-total_mean-mf_mean-pos_spher-N30e5-B10-E3-cosine-LR[1e-05;1e-06].pth"
 hub_model = "k4tel/bert-geolocation-prediction"
+
+# huggingface framework upload + pipeline test
+
 
 if torch.cuda.is_available():
     state = torch.load(local_model)
@@ -14,6 +18,32 @@ else:
     state = torch.load(local_model, map_location='cpu')
     device = torch.device("cpu")
     state = torch.load(local_model, map_location='cpu')
+
+
+class RegressionPipeline(Pipeline):
+    def _sanitize_parameters(self, **kwargs):
+        preprocess_kwargs = {}
+        if "maybe_arg" in kwargs:
+            preprocess_kwargs["maybe_arg"] = kwargs["maybe_arg"]
+        return preprocess_kwargs, {}, {}
+
+    def preprocess(self, inputs, maybe_arg=2):
+        encoded_corpus = self.tokenizer(text=inputs,
+                                        add_special_tokens=True,
+                                        padding='max_length',
+                                        truncation='longest_first',
+                                        max_length=300,
+                                        return_attention_mask=True)
+        return {"model_input": encoded_corpus}
+
+    def _forward(self, model_inputs):
+        # model_inputs == {"model_input": model_input}
+        outputs = self.model(torch.tensor(model_inputs['model_input']['input_ids']).reshape(1, -1).to(torch.int64),
+                             torch.tensor(model_inputs['model_input']['attention_mask']).reshape(1, -1).to(torch.int64))
+        return outputs.numpy()
+
+    def postprocess(self, model_outputs):
+        return model_outputs
 
 # AutoConfig.register("bert-geo-regressor", BertRegressorConfig)
 # AutoModel.register(BertRegressorConfig, BertGeoRegressor)

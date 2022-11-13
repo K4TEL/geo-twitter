@@ -2,6 +2,8 @@ import argparse
 from utils.prediction import *
 from utils.regressor import *
 
+# Entry point for prediction from text (model .pth files needed)
+
 ww_models = {
     "gsop": "U-NON-GEO+GEO-ONLY-O1-d-total_type-mf_mean-NP-N30e5-B10-E3-cosine-LR[1e-05;1e-06]",
     "gmop": "U-NON-GEO+GEO-ONLY-O5-d-total_type-mf_mean-NP-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]",

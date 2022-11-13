@@ -2,6 +2,8 @@ from utils.result_visuals import *
 from utils.regressor import *
 import torch
 
+# results manager and visual test on evaluated datasets
+
 feature = "full"
 file = f"pmop-test"
 
@@ -37,38 +39,6 @@ result.load_df(input_pred)
 
 result.result_metrics(True, 100)
 result.result_metrics(False, 100)
-
-# dims = [[0, 0, 1],
-#         [0, 1, 0],
-#         [1, 0, 0]]
-# angles = [0, 0, 0]
-# step = 15
-# for angle_step_z in range(13):
-#     angles[0] = angle_step_z*step
-#     for angle_step_y in range(13):
-#         angles[1] = angle_step_y*step
-#         for angle_step_x in range(1, 13):
-#             angles[2] = angle_step_x*step
-#             filename = f"hpcaori_rotated_z{angles[0]}y{angles[1]}x{angles[2]}"
-#
-#             rotating_object = original_object
-#             print(filename)
-#             for rotate_coord in range(3):
-#                 current_dim = dims[rotate_coord]
-#                 current_angle = angles[rotate_coord]
-#
-#                 rotating_object = md.transformations.rotate.rotateby(current_angle, direction=current_dim, ag = prettyclose)
-#
-#             modelobject = rotating_object
-#
-#             ElizabethII= md.Merge(modelobject, u.select_atoms('segid MEMB'),
-#                      u.select_atoms('segid WAT'), u.select_atoms('segid IONS'))
-#             CharlesIII = ElizabethII.atoms.write(f'prettyclose_{current_angle}{current_dim}.pdb')
-#             bilbo = { 0: 'Z', 1: 'Y', 2: 'X' }
-#             axes = bilbo[int(coord)]
-#             md.Universe(CharlesIII)
-#             CharlesIII.coordinates.GRO.GROWriter(f'prettyclose_{current_angle}{axes}.gro', reindex = True)
-#             CharlesIII.coordinates.GRO.GROWriter.fmt['box_orthorhombic'].format(box=(134.618, 134.618, 225.007))
 
 
 

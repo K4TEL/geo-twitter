@@ -20,10 +20,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.twitter_dataset import *
 from utils.result_manager import *
-from utils.scheduler import *
+from utils.cosine_scheduler import *
 from utils.regressor import *
 from utils.benchmarks import *
 from utils.result_visuals import *
+
+# model training + evaluation + hp tuning
+
 
 class ModelTrainer():
     def __init__(self, file_prefix, twitter_dataloader, epochs, batch, outcomes=1, covariance=None, weighted=False,
@@ -153,6 +156,7 @@ class ModelTrainer():
 
         torch.save(checkpoint, ckp_file)
 
+    # raw prediction results for spat models
     def predict(self, dataloader):
         self.model.eval()
         output = np.empty((0, self.key_outputs), float)
@@ -165,6 +169,7 @@ class ModelTrainer():
                     output = np.append(output, self.model(batch_inputs, batch_masks, self.key_feature).numpy(), axis=0)
         return output
 
+    #  training per-epoch metrics
     def eval_metrics(self, dataloader, model=None):
         model = self.model if model is None else model
         val_metric = np.zeros([len(dataloader), 2, 2], dtype=float)
@@ -195,6 +200,7 @@ class ModelTrainer():
 
         return val_metric
 
+    # result metric
     def results(self, dataloader, val_size, model=None):
         model = self.model if model is None else model
         model.eval()
@@ -235,6 +241,7 @@ class ModelTrainer():
 
         return val_metric, pm
 
+    # evaluation entry point
     def eval(self, val_size, threshold=200, map_size=1000, skip_size=0):
         if map_size > val_size:
             map_size = val_size
@@ -268,36 +275,7 @@ class ModelTrainer():
         visual.cum_dist(False, threshold)
         # visual.interact_lines(map_size)
 
-    def predicton(self, text):
-        print(text)
-        input, mask = self.data.single_text(text)
-        input = torch.tensor(input).to(self.device).reshape(1, -1)
-        mask = torch.tensor(mask).to(self.device).reshape(1, -1)
-        self.model.eval()
-        with torch.no_grad():
-            output = self.model(input, mask, self.key_feature)
-            if self.prob:
-                prob_model = self.benchmark.prob_models(output)
-
-            if self.cluster:
-                output = output.cpu().numpy()
-            else:
-                output = output.numpy()
-
-        print(output)
-        result = ResultManager(None, self.val_feature, self.device, self.benchmark, self.prefix)
-        if self.prob:
-            result.soft_outputs(list([prob_model]))
-        else:
-            result.coord_outputs(output)
-
-        print(result.means)
-        print(result.weights)
-        print(result.covs)
-
-        visual = ResultVisuals(result)
-        visual.gaus_map(0)
-
+    # training flow
     def train(self, start_epoch, train_loss_saved, scheduler, writer, log_step, ckp=True, clip_value=2):
         current_tlm = train_loss_saved
         if current_tlm is not None:
@@ -387,6 +365,7 @@ class ModelTrainer():
 
         return current_tlm
 
+    # training entry point
     def pretrain(self, train_size, test_ratio, local_model=None, ckp=True, log_step=1000, scheduler_type="cosine", skip_size=0):
         self.data.form_training(self.batch_size, train_size, test_ratio, skip_size=skip_size)
 
@@ -421,6 +400,7 @@ class ModelTrainer():
 
         writer.close()
 
+    # hp tuning entry point
     def hp_tuning(self, train_size, test_ratio, param_values, log_step=1000):
         self.data.form_training(self.batch_size, train_size, test_ratio, True)
 
@@ -519,6 +499,7 @@ class ModelTrainer():
 
         writer.close()
 
+    # scheduler hp tuning choice
     def get_scheduler(self, type, max_lr=None, min_lr=None, optimizer=None):
         if min_lr is None:
             min_lr = self.lr_min

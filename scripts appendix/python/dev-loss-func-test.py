@@ -5,6 +5,8 @@ import torch.distributions as dist
 
 from utils.regressor import *
 
+# loss functions for GMMs and (lon, lat) coords development test
+
 def coord_se_matrix(X, y, outcomes):
     error_by_coord = nn.MSELoss(reduction='none')
     Y = y.repeat(1, outcomes)
@@ -19,10 +21,12 @@ def distance2_matrix(X, y, outcomes, outputs_map):
         D = torch.cat((D, torch.sum(E[:, i:i+2], dim=1, keepdim=True)), 1)
     return D
 
+
 def weights(X, outcomes, outputs_map):
     softmax = nn.Softmax(dim=1)
     W = X[:, outputs_map["weight"][0]:outputs_map["weight"][1]].reshape([X.size(dim=0), outcomes]) if outputs_map["weight"] else torch.ones((X.size(dim=0), outcomes), device=X.device)
     return softmax(W)
+
 
 def spatial_loss(X, y, outcomes, outputs_map):
     if dist:
@@ -41,6 +45,7 @@ def spatial_loss(X, y, outcomes, outputs_map):
         L = E.mean(dim=1)
     return L
 
+
 def log_likelihood_loss(X, y, outcomes, outputs_map, cov="spher"):
     gaussian = GaussianModel(X, outcomes, outputs_map, cov)
     if outcomes > 1:
@@ -51,11 +56,13 @@ def log_likelihood_loss(X, y, outcomes, outputs_map, cov="spher"):
         lh = -gaussian.log_prob(y)
     return lh
 
+
 def coord_se_matrix(X, y, outcomes):
     error_by_coord = nn.MSELoss(reduction='none')
     Y = y.repeat(1, outcomes)
     E = error_by_coord(X, Y)
     return E
+
 
 def distance2_matrix(X, y, batch, outcomes, coord_slice):
     E = coord_se_matrix(X, y, outcomes)
@@ -63,6 +70,7 @@ def distance2_matrix(X, y, batch, outcomes, coord_slice):
     for i in range(0, coord_slice, 2):
         D = torch.cat((D, torch.sum(E[:, i:i+2], dim=1, keepdim=True)), 1)
     return D
+
 
 def GaussianModel(X, batch, outcomes, cov, coord_slice, cov_slice):
     softplus = nn.Softplus()
@@ -99,11 +107,13 @@ def GaussianModel(X, batch, outcomes, cov, coord_slice, cov_slice):
 
     return gaussian
 
+
 def GaussianWeights(X, batch, outcomes, weighted, cov_slice):
     softmax = nn.Softmax(dim=1)
     weights = X[:, cov_slice:].reshape([batch, outcomes]) if weighted else torch.ones((batch, outcomes), device=X.device)
     gmm_weights = dist.Categorical(softmax(weights))
     return gmm_weights
+
 
 class Loss():
     def __init__(self, batch_size, model, distance=True, out="min"):
@@ -165,7 +175,6 @@ class Loss():
             #     self.prob_loss = self.log_lh_mult[self.cov] if self.weighted else self.log_lh_equal[self.cov]
 
             self.prob_loss = self.log_likelihood_loss
-
 
     def log_likelihood_loss(self, outputs, labels):
         X = outputs.squeeze().float()
@@ -363,11 +372,13 @@ class Loss():
 #  DO NOT USE \/
 #
 
+
 def first_out_distance_loss(outputs, labels):
     X = outputs.squeeze().float()
     y = labels.squeeze().float()
     pdist = torch.nn.PairwiseDistance(p=2, keepdim=True)
     return pdist(X[:, 0:2], y).mean()
+
 
 def mult_out_weighted_coord_loss(outputs, labels):
     X = outputs.squeeze().float()
@@ -384,6 +395,7 @@ def mult_out_weighted_coord_loss(outputs, labels):
 
     total = torch.zeros(1, dtype=torch.float, requires_grad=True, device=X.device)
     return total + E[:, 0:2].mean()
+
 
 def single_loss(outputs, labels):
     x = outputs.squeeze().float()
@@ -405,6 +417,7 @@ def single_loss(outputs, labels):
 
     return total + pdist(torch.tensor(x[:, 0:2]), y).mean()
 
+
 def mult_coef_loss(outputs, labels):
     X = outputs.squeeze().float()
     y = labels.squeeze().float()
@@ -423,12 +436,14 @@ def mult_coef_loss(outputs, labels):
 
     return E_out_sum.mean()
 
+
 def pair_dist(X, y):
     pdist = torch.nn.PairwiseDistance(p=2, keepdim=True)
     D = torch.zeros((X.size(dim=0), 0), device=X.device)
     for i in range(0, X.size(dim=1), 2):
         D = torch.cat((D, pdist(torch.tensor(X[:, i:i+2]), y)), 1)
     return D
+
 
 def mult_loss(outputs, labels):
     X = outputs.squeeze().float()
@@ -473,11 +488,13 @@ def mult_loss(outputs, labels):
     # print(res)
     return total
 
+
 def mult_out_min_distance_loss(outputs, labels):
     X = outputs.squeeze().float()
     y = labels.squeeze().float()
     total = torch.zeros(1, dtype=torch.float, requires_grad=True, device=X.device)
     return total + torch.min(pair_dist(X, y), 1, keepdim=True).values.mean()
+
 
 def mult_out_softmin_distance_loss(outputs, labels):
     X = outputs.squeeze().float()

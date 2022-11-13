@@ -9,7 +9,10 @@ import haversine as hs
 from utils.regressor import *
 from utils.benchmarks import *
 
+# evaluation results manager
 
+
+# Haversine distance to the genuine truth in km for PRA metrics (outliers set to map borders)
 def metric_distance(true, points, size):
     D = np.array([], dtype=float)
     longs = points[:, 0]
@@ -77,6 +80,7 @@ class ResultManager():
             self.true = np.array([])
             self.dists = None
 
+    # load evaluation results df to class entities
     def load_df(self, filename, sorting=True):
         print(f"VAL\tLOAD\tLoading dataset from {filename}")
         self.df = pd.read_json(path_or_buf=filename, lines=True)
@@ -155,6 +159,7 @@ class ResultManager():
             self.df.to_json(f, orient='records', lines=True)
         print(f"VAL\tSAVE\tPredicted data of {self.size} samples is written to file: {filename}")
 
+    # add loss metrics to df
     def metrics(self, val_metric):
         if self.prob:
             metrics_df = pd.DataFrame(
@@ -167,6 +172,7 @@ class ResultManager():
         print(f"RESULT\tAdding metrics column(s) {', '.join(str(col) for col in metrics_df.columns.values.tolist())} to dataframe")
         self.df = pd.concat([self.df, metrics_df], axis=1)
 
+    # results spatial metrics: Average/Median Distance Error (AED, MED), MSE, MAE, Acc@161
     def spatial_metric(self, threshold=100, best=True):
         print("Calculating mean and median errors in km")
         if best and self.outcomes > 1:
@@ -204,6 +210,7 @@ class ResultManager():
 
         return aed, med, mse, mae, acc,acc161
 
+    # results probabilistic metrics: Average/Median Comprehensive Accuracy Error (ACAE, MCAE), Average/Median 95% Prediction Region Area (APRA, MPRA), 95%Coverage (COV)
     def prob_metric(self, best=True, n=100):
         print("Calculating mean and median errors for GMM")
         if best and self.outcomes > 1:
@@ -267,6 +274,7 @@ class ResultManager():
 
         return acae, mcae, apra, mpra, cov
 
+    # all results metrics
     def result_metrics(self, best=True, threshold=100):
         print(f"Calculating spatial {'and probabilistic ' if self.prob else ''}metrics for {self.size} result samples")
         aed, med, mse, mae, acc, acc161 = self.spatial_metric(threshold, best)
@@ -296,6 +304,7 @@ class ResultManager():
             self.performance_df.to_csv(f, index=False, sep="\t", mode="a")
         print(f"VAL\tSAVE\tPerformance metrics of {self.size} samples are written to file: {filename}")
 
+    # sort per-tweet outcomes by their weights
     def sort_outcomes(self):
         if self.dists is None and self.true.size > 0:
             self.dists = self.distances(self.means)
@@ -319,6 +328,7 @@ class ResultManager():
             if self.prob:
                 self.covs[i, :] = self.covs[i, index]
 
+    # add to df plain spat outputs
     def coord_outputs(self, predicted):
         self.means = np.multiply(predicted[:, self.outputs_map["coord"][0]:self.outputs_map["coord"][1]], 100) if self.scaled else predicted[:, self.outputs_map["coord"][0]:self.outputs_map["coord"][1]]
         self.means = self.means.reshape(self.size, 2) if self.outcomes == 1 else self.means.reshape(self.size, self.outcomes, 2)
@@ -348,6 +358,7 @@ class ResultManager():
             print(f"RESULT\tSetting spatial output columns {', '.join(str(col) for col in spat_df.columns.values.tolist())} in dataframe")
             self.df = pd.concat([self.df, spat_df], axis=1)
 
+    # add to df prob outputs (reading GM/GMM models)
     def soft_outputs(self, pm):
         self.prob_models = pm
 
@@ -404,6 +415,7 @@ class ResultManager():
             print(f"RESULT\tSetting spatial and probabilistic output columns {', '.join(str(col) for col in prob_models_df.columns.values.tolist())} in dataframe")
             self.df = pd.concat([self.df, prob_models_df], axis=1)
 
+    # Haversine distances to the genuine truth in km for coords
     def distances(self, points):
         print(f"RESULT\tCalculating distances of {self.size} samples with {self.outcomes} outcome(s)")
         if self.outcomes == 1:

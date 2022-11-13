@@ -23,10 +23,15 @@ batch_size = 16
 tokenizer = CamembertTokenizer.from_pretrained(model_name)
 coord_scaler = StandardScaler()
 
+# minimal settings test run
+# original to this adaptation code: https://medium.com/@anthony.galtier/fine-tuning-bert-for-a-regression-task-is-a-description-enough-to-predict-a-propertys-list-price-cf97cd7cb98a
+# author: Anthony Galtier
+
 def filter_websites(text):
     pattern = r'(http\:\/\/|https\:\/\/)?([a-z0-9][a-z0-9\-]*\.)+[a-z][a-z\-]*'
     text = re.sub(pattern, '', text)
     return text
+
 
 def filter_long_descriptions(tokenizer, descriptions, max_len):
     indices = []
@@ -37,6 +42,7 @@ def filter_long_descriptions(tokenizer, descriptions, max_len):
             indices.append(i)
     return indices
 
+
 def create_dataloaders(inputs, masks, labels, batch_size):
     input_tensor = torch.tensor(inputs)
     mask_tensor = torch.tensor(masks)
@@ -46,6 +52,7 @@ def create_dataloaders(inputs, masks, labels, batch_size):
     dataloader = DataLoader(dataset, batch_size=batch_size,
                             shuffle=True)
     return dataloader
+
 
 class BertRegressor(nn.Module):
     def __init__(self, drop_rate=0.2, freeze_camembert=False):
@@ -63,6 +70,7 @@ class BertRegressor(nn.Module):
         class_label_output = outputs[1]
         outputs = self.regressor(class_label_output)
         return outputs
+
 
 def train(model, optimizer, scheduler, loss_function, epochs,
           train_dataloader, device, clip_value=2):
@@ -85,6 +93,7 @@ def train(model, optimizer, scheduler, loss_function, epochs,
 
     return model
 
+
 def evaluate(model, loss_function, test_dataloader, device):
     model.eval()
     test_loss, test_r2 = [], []
@@ -98,12 +107,14 @@ def evaluate(model, loss_function, test_dataloader, device):
         test_r2.append(r2.item())
     return test_loss, test_r2
 
+
 def r2_score(outputs, labels):
     labels_mean = torch.mean(labels)
     ss_tot = torch.sum((labels - labels_mean) ** 2)
     ss_res = torch.sum((labels - outputs) ** 2)
     r2 = 1 - ss_res / ss_tot
     return r2
+
 
 def predict(model, dataloader, device):
     model.eval()
@@ -119,6 +130,7 @@ def predict(model, dataloader, device):
             #print(output)
     return output
 
+
 def pretraining(model):
     model = train(model, optimizer, scheduler, loss_function, epochs,
                   train_dataloader, device, clip_value=2)
@@ -132,6 +144,7 @@ def pretraining(model):
     print(evaluate(model, loss_function, test_dataloader, device))
 
     save(model, optimizer)
+
 
 def evalueting(model):
     checkpoint = torch.load(output_model, map_location='cpu')
@@ -179,6 +192,7 @@ def evalueting(model):
     r_squared = r2_score(y_test, y_pred)
 
     print(mae, mdae, mse, mape, r_squared)
+
 
 data = pd.read_json(path_or_buf=file, lines=True)
 print(data.head())

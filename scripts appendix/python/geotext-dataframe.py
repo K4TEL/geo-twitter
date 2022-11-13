@@ -2,6 +2,10 @@ import pandas as pd
 import re
 import string
 from sklearn.model_selection import train_test_split
+
+
+# GeoText data from Eisenstein work - forming train and test dataframes
+
 # df = pd.read_csv("datasets/full_text.txt",
 #                  delimiter="\t",
 #                  header=None,
@@ -15,6 +19,7 @@ from sklearn.model_selection import train_test_split
 # edf = df.sample(n=76000, random_state=42)
 # print(df.info())
 # print(len(edf['user'].unique()))
+
 df = pd.read_json(path_or_buf="datasets/eisenstein.jsonl", lines=True)
 
 users = [y for x, y in df.groupby('user')]
