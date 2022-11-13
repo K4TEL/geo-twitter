@@ -3,7 +3,6 @@
 runs/
 models/
 .idea/
-datasets/*.jsonl
 
 
 # Byte-compiled / optimized / DLL files
