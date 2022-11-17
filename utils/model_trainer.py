@@ -242,14 +242,15 @@ class ModelTrainer():
         return val_metric, pm
 
     # evaluation entry point
-    def eval(self, val_size, threshold=200, map_size=1000, skip_size=0):
+    def eval(self, val_size, threshold=200, map_size=1000, by_user=False, skip_size=0):
         if map_size > val_size:
             map_size = val_size
 
         print(f"\nStarting evaluation for model {self.model_file}")
         self.load_local_model()
 
-        self.data.form_validation(self.batch_size, val_size, skip_size)
+        self.data.form_validation(self.batch_size, val_size, by_user, skip_size)
+        val_size = len(self.data.val_dataloader.dataset)
 
         print(f"\nCalculating result metrics for {val_size} samples")
         val_metric, prob_models = self.results(self.data.val_dataloader, val_size)
@@ -257,7 +258,14 @@ class ModelTrainer():
         if self.prob:
             print(f"\tProbabilistic:\t-LLH Loss:\t{np.mean(val_metric[:, 1, 0], axis=0)}\tProbability:\t{np.mean(val_metric[:, 0, 1], axis=0)}")
 
-        result = ResultManager(self.data.val_df, None, self.val_feature, self.device, self.benchmark, self.scaled, self.prefix)
+        result = ResultManager(self.data.val_df,
+                               None,
+                               self.val_feature,
+                               self.device,
+                               self.benchmark,
+                               self.scaled,
+                               by_user,
+                               self.prefix)
         if self.prob:
             result.soft_outputs(prob_models)
         else:

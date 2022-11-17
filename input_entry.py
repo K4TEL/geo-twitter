@@ -12,7 +12,7 @@ ww_models = {
 }
 
 outcomes = 5
-prob = True
+prob = False
 features = ["NON-GEO", "GEO-ONLY"]
 
 

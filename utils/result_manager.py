@@ -12,6 +12,23 @@ from utils.benchmarks import *
 # evaluation results manager
 
 
+# GM/GMM
+def GaussianModel(means, sigma):
+    return dist.MultivariateNormal(torch.from_numpy(means), torch.from_numpy(sigma))
+
+
+# GMM weights
+def GaussianWeights(weights):
+    return dist.Categorical(torch.from_numpy(weights))
+
+
+# GMM complete
+def get_gm_family(means, sigma, weights):
+    gaussian = GaussianModel(means, sigma)
+    gmm_weights = GaussianWeights(weights)
+    return dist.MixtureSameFamily(gmm_weights, gaussian)
+
+
 # Haversine distance to the genuine truth in km for PRA metrics (outliers set to map borders)
 def metric_distance(true, points, size):
     D = np.array([], dtype=float)
@@ -28,8 +45,89 @@ def metric_distance(true, points, size):
     return D
 
 
+# spatial metrics: Average/Median Distance Error (AED, MED), MSE, MAE, Acc@161
+def geospatial_performance(true, dists, means, weights, outcomes, size, best, threshold=100):
+    print(f"Calculating spatial metrics for {size} samples")
+    if best and outcomes > 1:
+        dists, means = dists[:, 0], means[:, 0]
+    else:
+        if outcomes > 1:
+            dists = np.sum(dists * weights, axis=1)
+            mse, mae = np.zeros((size, outcomes)), np.zeros((size, outcomes))
+
+    aed, med = np.mean(dists), np.median(dists)
+    acc = (dists < threshold).sum() / size * 100
+    acc161 = (dists < 161).sum() / size * 100
+
+    if best or outcomes == 1:
+        mse = np.mean((true - means)**2)
+        mae = np.sum(np.abs(true - means), axis=1).mean()
+    elif not best and outcomes > 1:
+        for k in range(outcomes):
+            mse[:, k] = np.mean(np.power(true - means[:, k], 2), axis=1)
+            mae[:, k] = np.mean(np.abs(true - means[:, k]), axis=1)
+
+        mse = np.sum(mse * weights, axis=1).mean()
+        mae = np.sum(mae * weights, axis=1).mean()
+
+    return (aed, med, acc, acc161, mse, mae)
+
+
+# probabilistic metrics: Average/Median Comprehensive Accuracy Error (ACAE, MCAE), Average/Median 95% Prediction Region Area (APRA, MPRA), 95%Coverage (COV)
+def probabilistic_performance(trues, covs, means, weights, outcomes, size, best, n=100):
+    print(f"Calculating probabilistic metrics for {size} samples")
+    if best and outcomes > 1:
+        covs, means = covs[:, 0], means[:, 0]
+
+    cae, pra, cov = np.zeros((size, outcomes)), \
+                    np.zeros((size, outcomes)), \
+                    np.zeros((size, outcomes))
+
+    crit_chi = 5.991  # 0.95 2
+
+    rng = np.random.default_rng()
+    if not best and outcomes > 1:
+        for i in range(size):
+            for k in range(outcomes):
+                mean, covar, true, weight = means[i, k], covs[i, k], trues[i], weights[i, k]
+                gaus_sample = rng.multivariate_normal(mean, covar, n)
+                rep_true = np.repeat(true.reshape(1, 2), n, axis=0).reshape(n, 2)
+                gaus_dist = metric_distance(rep_true, gaus_sample, n)
+
+                cae[i, k] = np.mean(gaus_dist, axis=0) * weight
+
+                sigma = np.sqrt(covar[0, 0])
+                error = np.sqrt(np.sum((rep_true - mean)**2))
+                pra[i, k] = np.pi * sigma * crit_chi * weight
+                cov[i, k] = 1 if error/sigma <= crit_chi else 0
+
+        pra, cae = np.sum(pra, axis=1), np.sum(cae, axis=1)
+
+    else:
+        for i in range(size):
+            mean, covar, true = means[i], covs[i], trues[i]
+
+            gaus_sample = rng.multivariate_normal(mean, covar, n)
+            rep_true = np.repeat(true.reshape(1, 2), n, axis=0).reshape(n, 2)
+            gaus_dist = metric_distance(rep_true, gaus_sample, n)
+
+            cae[i] = np.mean(gaus_dist, axis=0)
+
+            sigma = covar[0, 0]
+            error = np.sum((rep_true - mean)**2)
+
+            pra[i] = np.pi * sigma * crit_chi
+            cov[i] = 1 if error/sigma <= crit_chi else 0
+
+    acae, mcae, apra, mpra, cov = np.mean(cae), np.median(cae), \
+                                  np.mean(pra), np.median(pra), \
+                                  cov.mean()
+
+    return (acae, mcae, apra, mpra, cov)
+
+
 class ResultManager():
-    def __init__(self, val_df, text, feature, device, model_benchmark, scaled, prefix=None):
+    def __init__(self, val_df, text, feature, device, model_benchmark, scaled, by_user=False, prefix=None):
         self.cluster = device.type == "cuda"
         self.feature = feature
         if prefix is None:
@@ -39,6 +137,8 @@ class ResultManager():
         self.model_bm = model_benchmark
 
         self.scaled = scaled
+        self.by_user = by_user
+
         self.outcomes = self.model_bm.outcomes
         self.cov = self.model_bm.cov
         self.weighted = self.model_bm.weighted
@@ -74,9 +174,11 @@ class ResultManager():
             self.df = val_df
             self.true = val_df[["lon", "lat"]].to_numpy()
             self.size = len(self.df.index)
+            if self.by_user:
+                self.users = len(self.df['USER-ONLY'].unique())
         else:
             self.df = pd.DataFrame()
-            self.size = 0
+            self.size = 1
             self.true = np.array([])
             self.dists = None
 
@@ -85,6 +187,8 @@ class ResultManager():
         print(f"VAL\tLOAD\tLoading dataset from {filename}")
         self.df = pd.read_json(path_or_buf=filename, lines=True)
         self.size = len(self.df.index)
+        if self.by_user:
+            self.users = len(self.df['USER-ONLY'].unique())
         self.true = self.df[["lon", "lat"]].to_numpy()
 
         if self.outcomes > 1:
@@ -172,31 +276,34 @@ class ResultManager():
         print(f"RESULT\tAdding metrics column(s) {', '.join(str(col) for col in metrics_df.columns.values.tolist())} to dataframe")
         self.df = pd.concat([self.df, metrics_df], axis=1)
 
-    # results spatial metrics: Average/Median Distance Error (AED, MED), MSE, MAE, Acc@161
+    # results spatial metrics
     def spatial_metric(self, threshold=100, best=True):
-        print("Calculating mean and median errors in km")
-        if best and self.outcomes > 1:
-            dists, means = self.dists[:, 0], self.means[:, 0]
+        if self.by_user:
+            users = self.df['USER-ONLY'].unique()
+            metric = np.zeros(6, dtype=float)
+            for user in users:
+                ids = self.df.index[self.df['USER-ONLY'] == user].tolist()
+                user_metric = geospatial_performance(self.true[ids],
+                                                     self.dists[ids],
+                                                     self.means[ids],
+                                                     self.weights[ids],
+                                                     self.outcomes,
+                                                     len(ids),
+                                                     best, threshold)
+
+                metric += np.array(user_metric)
+
+            metric = metric / len(users)
+            aed, med, acc, acc161, mse, mae = metric
+
         else:
-            dists, means = self.dists, self.means
-            if self.outcomes > 1:
-                dists = np.sum(dists * self.weights, axis=1)
-                mse, mae = np.zeros((self.size, self.outcomes)), np.zeros((self.size, self.outcomes))
-
-        aed, med = np.mean(dists), np.median(dists)
-        acc = (dists < threshold).sum() / self.size * 100
-        acc161 = (dists < 161).sum() / self.size * 100
-
-        if best or self.outcomes == 1:
-            mse = np.mean((self.true - means)**2)
-            mae = np.sum(np.abs(self.true - means), axis=1).mean()
-        elif not best and self.outcomes > 1:
-            for k in range(self.outcomes):
-                mse[:, k] = np.mean(np.power(self.true - means[:, k], 2), axis=1)
-                mae[:, k] = np.mean(np.abs(self.true - means[:, k]), axis=1)
-
-            mse = np.sum(mse * self.weights, axis=1).mean()
-            mae = np.sum(mae * self.weights, axis=1).mean()
+            aed, med, acc, acc161, mse, mae = geospatial_performance(self.true,
+                                                                     self.dists,
+                                                                     self.means,
+                                                                     self.weights,
+                                                                     self.outcomes,
+                                                                     self.size,
+                                                                     best, threshold)
 
         loss_dist = np.array(self.df["dist_loss"])
         loss_dist = loss_dist * 10000 if self.scaled else loss_dist
@@ -208,59 +315,36 @@ class ResultManager():
         print(f"\tAccuracy (<100km): {round(acc, 2)}%\t- below threshold"
               f"\n\tAccuracy (<161km): {round(acc161, 2)}%\t- below threshold")
 
-        return aed, med, mse, mae, acc,acc161
+        return aed, med, mse, mae, acc, acc161
 
-    # results probabilistic metrics: Average/Median Comprehensive Accuracy Error (ACAE, MCAE), Average/Median 95% Prediction Region Area (APRA, MPRA), 95%Coverage (COV)
+    # results probabilistic metrics
     def prob_metric(self, best=True, n=100):
-        print("Calculating mean and median errors for GMM")
-        if best and self.outcomes > 1:
-            covs, means = self.covs[:, 0], self.means[:, 0]
-        else:
-            covs, means = self.covs, self.means
+        if self.by_user:
+            users = self.df['USER-ONLY'].unique()
+            metric = np.zeros(5, dtype=float)
+            for user in users:
+                ids = self.df.index[self.df['USER-ONLY'] == user].tolist()
+                user_metric = probabilistic_performance(self.true[ids],
+                                                         self.covs[ids],
+                                                         self.means[ids],
+                                                         self.weights[ids],
+                                                         self.outcomes,
+                                                         len(ids),
+                                                         best, n)
 
-        cae, pra, cov = np.zeros((self.size, self.outcomes)), \
-                        np.zeros((self.size, self.outcomes)), \
-                        np.zeros((self.size, self.outcomes))
+                metric += np.array(user_metric)
 
-        crit_chi = 5.991  # 0.95 2
-
-        rng = np.random.default_rng()
-        if not best and self.outcomes > 1:
-            for i in range(self.size):
-                for k in range(self.outcomes):
-                    mean, covar, true, weight = means[i, k], covs[i, k], self.true[i], self.weights[i, k]
-                    gaus_sample = rng.multivariate_normal(mean, covar, n)
-                    true = np.repeat(true.reshape(1, 2), n, axis=0).reshape(n, 2)
-                    gaus_dist = metric_distance(true, gaus_sample, n)
-
-                    cae[i, k] = np.mean(gaus_dist, axis=0) * weight
-
-                    sigma = np.sqrt(covar[0, 0])
-                    error = np.sqrt(np.sum((true - mean)**2))
-                    pra[i, k] = np.pi * sigma * crit_chi * weight
-                    cov[i, k] = 1 if error/sigma <= crit_chi else 0
-
-            pra, cae = np.sum(pra, axis=1), np.sum(cae, axis=1)
+            metric = metric / len(users)
+            acae, mcae, apra, mpra, cov = metric
 
         else:
-            for i in range(self.size):
-                mean, covar, true = means[i], covs[i], self.true[i]
-
-                gaus_sample = rng.multivariate_normal(mean, covar, n)
-                true = np.repeat(true.reshape(1, 2), n, axis=0).reshape(n, 2)
-                gaus_dist = metric_distance(true, gaus_sample, n)
-
-                cae[i] = np.mean(gaus_dist, axis=0)
-
-                sigma = covar[0, 0]
-                error = np.sum((true - mean)**2)
-
-                pra[i] = np.pi * sigma * crit_chi
-                cov[i] = 1 if error/sigma <= crit_chi else 0
-
-        acae, mcae, apra, mpra, cov = np.mean(cae), np.median(cae), \
-                                      np.mean(pra), np.median(pra), \
-                                      cov.mean()
+            acae, mcae, apra, mpra, cov = probabilistic_performance(self.true,
+                                                 self.covs,
+                                                 self.means,
+                                                 self.weights,
+                                                 self.outcomes,
+                                                 self.size,
+                                                 best, n)
 
         loss_llh = np.array(self.df["lh_loss"]).mean()
         pdf = np.array(self.df["pdf"]).mean()
@@ -276,7 +360,8 @@ class ResultManager():
 
     # all results metrics
     def result_metrics(self, best=True, threshold=100):
-        print(f"Calculating spatial {'and probabilistic ' if self.prob else ''}metrics for {self.size} result samples")
+        print(f"Calculating spatial {'and probabilistic ' if self.prob else ''}metrics "
+              f"for {self.size} result samples {'per user' if self.by_user else 'per tweet'}")
         aed, med, mse, mae, acc, acc161 = self.spatial_metric(threshold, best)
         spat_metric = [["Average SAE", aed],
                       ["Median SAE", med],
@@ -297,11 +382,12 @@ class ResultManager():
 
         metric = spat_metric + prob_metric
         self.performance_df = pd.DataFrame(metric, columns=["metric", "value"])
+        self.performance_df['metric'] = self.performance_df['metric'].apply(lambda x: "{:<20}".format(x))
 
         filename = f"results/val-data/{self.prefix}_metric_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
 
         with open(filename, "w") as f:
-            self.performance_df.to_csv(f, index=False, sep="\t", mode="a")
+            self.performance_df.to_csv(f, header=False, index=False, sep="\t", mode="a")
         print(f"VAL\tSAVE\tPerformance metrics of {self.size} samples are written to file: {filename}")
 
     # sort per-tweet outcomes by their weights
@@ -310,23 +396,27 @@ class ResultManager():
             self.dists = self.distances(self.means)
 
         print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by probabilistic weights")
-        sort_indexes = np.argsort(self.weights, axis=1)
 
         if self.text:
-            self.means = self.means[0, sort_indexes[:, ::-1]]
+            sort_indexes = np.argsort(self.weights[0])
+            index = sort_indexes[::-1]
+            self.means[0] = self.means[0, index]
             if self.outcomes > 1:
-                self.weights = self.weights[0, sort_indexes[:, ::-1]]
+                self.weights[0] = self.weights[0, index]
             if self.prob:
-                self.covs = self.covs[0, sort_indexes[:, ::-1]]
+                self.covs[0] = self.covs[0, index]
 
-        for i in range(self.size):
-            index = sort_indexes[i][::-1]
-            self.means[i, :] = self.means[i, index]
-            self.weights[i, :] = self.weights[i, index]
-            if self.dists is not None:
-                self.dists[i, :] = self.dists[i, index]
-            if self.prob:
-                self.covs[i, :] = self.covs[i, index]
+        else:
+            sort_indexes = np.argsort(self.weights, axis=1)
+
+            for i in range(self.size):
+                index = sort_indexes[i][::-1]
+                self.means[i, :] = self.means[i, index]
+                self.weights[i, :] = self.weights[i, index]
+                if self.dists is not None:
+                    self.dists[i, :] = self.dists[i, index]
+                if self.prob:
+                    self.covs[i, :] = self.covs[i, index]
 
     # add to df plain spat outputs
     def coord_outputs(self, predicted):
@@ -340,7 +430,7 @@ class ResultManager():
             self.dists = self.distances(self.means)
 
         if self.outcomes > 1:
-            print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by distances error")
+            #print(f"RESULT\tSorting all outputs for {self.outcomes} outcomes by distances error")
             self.sort_outcomes()
 
         if self.df.size > 0:

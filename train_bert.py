@@ -6,9 +6,9 @@ from utils.model_trainer import *
 
 f = ["GEO", "NON-GEO", "META-DATA", "TEXT-ONLY", "GEO-ONLY"]
 
-dataset_file = 'eisenstein.jsonl'
-features = [f[1]]
-val_f = None
+dataset_file = 'worldwide-twitter-day-small.jsonl'
+features = [f[1], f[4]]
+val_f = None  # None -> features[0]
 target_columns = ["lon", "lat"]
 
 original_worldwide_model = "bert-base-multilingual-cased"
@@ -54,7 +54,7 @@ scheduler = scheduler_types[0]
 val_size = 100
 threshold = 100
 
-train_size = 1000
+train_size = 0
 test_ratio = 0.1
 seed = 42
 
@@ -93,6 +93,7 @@ def main():
     parser.add_argument('-s', '--seed', type=int, default=seed, help='Random seed (default: 42)')
     parser.add_argument('-v', '--val_size', type=int, default=val_size, help='Validation dataloader size')
     parser.add_argument('-th', '--threshold', type=int, default=threshold, help='Validation threshold in km (default: 200)')
+    parser.add_argument('-vu', '--val_user', action="store_true", help="Form validation dataset by user (default: False)")
 
     # parser.add_argument('-po', '--pred_output', type=str, default=output_pred, help='Output file for predictions (in jsonl format)')
     # parser.add_argument('-mo', '--map_output', type=str, default=output_map, help='Output file for map plot')
@@ -166,6 +167,7 @@ def main():
         trainer.eval(args.val_size,
                      args.threshold,
                      args.val_size,
+                     args.val_user,
                      args.train_size)
 
 

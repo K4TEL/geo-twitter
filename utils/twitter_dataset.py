@@ -60,6 +60,11 @@ def crop_dataset(data, size, seed):
     return data.drop(data.sample(n=size, random_state=seed).index, axis=0)
 
 
+def sample_users(data, users_n):
+    user_list = data['user'].value_counts()[:users_n].index.tolist()
+    return data[data['user'].isin(user_list)]
+
+
 class TwitterDataloader():
     def __init__(self, filename, features, target, tokenizer, seed=42, scaled=False, val_feature=None):
         self.filename = filename
@@ -146,12 +151,19 @@ class TwitterDataloader():
         train_df = self.feature_split_filter(train_df)
         self.create_feature_dataloaders(train_df, True, batch_size, shuffle, test_ratio)
 
-    def form_validation(self, batch_size, size, skip_size=0):
+    def form_validation(self, batch_size, size, by_user=False, skip_size=0):
         if skip_size > 0:
             self.data = crop_dataset(self.data, skip_size, self.seed)
-        print(f"DATASET\tForming validation dataset of {size} samples with batch size {batch_size} for {self.val_feature} text feature")
-        self.val_df = self.data.sample(n=size, random_state=self.seed).copy()
+
+        print(f"DATASET\tForming validation dataset of {size} {'users' if by_user else 'samples'} with batch size {batch_size} for {self.val_feature} text feature")
+        if by_user:
+            self.val_df = sample_users(self.data, size)
+            self.features += ["USER-ONLY"]
+            print(f"DATASET\tSize of the validation dataset with {size} users: {len(self.val_df.index)} samples")
+        else:
+            self.val_df = self.data.sample(n=size, random_state=self.seed).copy()
         del self.data
+
         self.val_df = self.feature_split_filter(self.val_df)
         self.create_feature_dataloaders(self.val_df, False, batch_size)
 

@@ -4,8 +4,8 @@ import torch
 
 # results manager and visual test on evaluated datasets
 
-feature = "full"
-file = f"pmop-test"
+feature = "NON-GEO"
+file = f"U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N6615_VF-NON-GEO_2022-11-17"
 
 input_pred = f"results/val-data/{file}.jsonl"
 
@@ -22,12 +22,13 @@ else:
     device = torch.device("cpu")
 
 bert_wrapper = BERTregModel(n_outcomes=5, covariance="spher", weighted=True, features=["NON-GEO", "GEO-ONLY"])
-model = ModelBenchmark(bert_wrapper, distance=True, loss_prob="pos", mf_loss="sum", total_loss="sum")
-result = ResultManager(None, feature, device, model, scaled=False, prefix=file)
+model = ModelBenchmark(bert_wrapper, distance=True, loss_prob="pos", mf_loss="mean", total_loss="mean")
+result = ResultManager(None, None, feature, device, model, scaled=False, by_user=True, prefix=file)
 result.load_df(input_pred)
+visual = ResultVisuals(result)
+visual.summarize_prediction(1, 300)
+#visual.gaus_map()
 
-
-#visual = ResultVisuals(result)
 #visual.gaus_compare()
 #visual.prob_map_animation(228)
 #visual.gaus_map()
@@ -37,8 +38,8 @@ result.load_df(input_pred)
 #visual.interact_lines(10)
 #visual.save_df()
 
-result.result_metrics(True, 100)
-result.result_metrics(False, 100)
+# result.result_metrics(True, 100)
+# result.result_metrics(False, 100)
 
 
 
