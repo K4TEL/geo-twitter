@@ -11,8 +11,6 @@ from transformers import BertModel, get_linear_schedule_with_warmup
 
 from torch.optim.lr_scheduler import CosineAnnealingLR, OneCycleLR, ReduceLROnPlateau, StepLR, MultiStepLR, CyclicLR
 
-#from sklearn.metrics import r2_score
-
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.nn.utils.clip_grad import clip_grad_norm_
@@ -170,7 +168,7 @@ class ModelTrainer():
         return output
 
     #  training per-epoch metrics
-    def eval_metrics(self, dataloader, model=None):
+    def test_metrics(self, dataloader, model=None):
         model = self.model if model is None else model
         val_metric = np.zeros([len(dataloader), 2, 2], dtype=float)
         model.eval()
@@ -273,15 +271,12 @@ class ModelTrainer():
 
         result.metrics(val_metric)
         result.save_df()
-        result.result_metrics(True, 100)
-        if self.outcomes > 1:
-            result.result_metrics(False, 100)
-        #result.result_metrics(False, 100)
+
+        result.performance()
+
         visual = ResultVisuals(result)
         visual.density()
-        #visual.gaus_map(1)
         visual.cum_dist(False, threshold)
-        # visual.interact_lines(map_size)
 
     # training flow
     def train(self, start_epoch, train_loss_saved, scheduler, writer, log_step, ckp=True, clip_value=2):
@@ -350,7 +345,7 @@ class ModelTrainer():
                     scheduler.step()
 
             print(f"EPOCH\t{epoch+1}\tCalculating evaluation metrics")
-            val_metric = self.eval_metrics(self.data.test_dataloader)
+            val_metric = self.test_metrics(self.data.test_dataloader)
             self.benchmark.log(writer, (epoch+1)*epoch_steps, scheduler.optimizer.param_groups[0]["lr"], train_metric, step+1, val_metric)
 
             current_tlm = self.benchmark.mean_epoch_train_loss
@@ -374,7 +369,7 @@ class ModelTrainer():
         return current_tlm
 
     # training entry point
-    def pretrain(self, train_size, test_ratio, local_model=None, ckp=True, log_step=1000, scheduler_type="cosine", skip_size=0):
+    def finetune(self, train_size, test_ratio, local_model=None, ckp=True, log_step=1000, scheduler_type="cosine", skip_size=0):
         self.data.form_training(self.batch_size, train_size, test_ratio, skip_size=skip_size)
 
         if local_model is not None:
@@ -487,7 +482,7 @@ class ModelTrainer():
                         run_scheduler.step()
 
                 print(f"EPOCH\t{epoch+1}\tCalculating evaluation metrics")
-                val_spatial_loss, val_spatial_r2, val_lh_loss, val_prob, = self.eval_metrics(self.data.test_dataloader)
+                val_spatial_loss, val_spatial_r2, val_lh_loss, val_prob, = self.test_metrics(self.data.test_dataloader)
                 self.benchmark.log(writer, (epoch+1)*epoch_steps, run_scheduler.optimizer.param_groups[0]["lr"],
                                    spatial_loss, spatial_r2, total_batch_loss, lh_loss, prob,
                                    val_spatial_loss, val_spatial_r2, val_lh_loss, val_prob)

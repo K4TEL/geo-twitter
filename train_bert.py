@@ -4,25 +4,15 @@ from utils.model_trainer import *
 
 # Entry point for training anf evaluation of the models
 
-f = ["GEO", "NON-GEO", "META-DATA", "TEXT-ONLY", "GEO-ONLY"]
+f = ["GEO", "NON-GEO", "META-DATA", "TEXT-ONLY", "GEO-ONLY", "USER-ONLY"]
 
-dataset_file = 'worldwide-twitter-day-small.jsonl'
+dataset_file = 'worldwide-twitter-day-small.jsonl'  # .jsonl
 features = [f[1], f[4]]
 val_f = None  # None -> features[0]
 target_columns = ["lon", "lat"]
 
 original_worldwide_model = "bert-base-multilingual-cased"
-original_usa_model = "bertweet-base-sentiment-analysis"
-
-# feature_columns = ["full", "all", "texts", "place", "user"]
-
-# local_model = f'test-bert-ua-{feature_column}.pth'
-
-# ckp_file = f'ckp-bert-ca-{feature_column}.pth'
-
-# output_pred = f"results/{datetime.today().strftime('%Y-%m-%d')}-prediction-ca-{feature_column}.jsonl"
-# output_map = f"img/{datetime.today().strftime('%Y-%m-%d')}-map-ca-{feature_column}.png"
-# output_dist = f"img/{datetime.today().strftime('%Y-%m-%d')}-dist-ca-test-{feature_column}.png"
+original_usa_model = "bert-base-cased"
 
 # parameters = dict(
 #     max_lr = [5e-5, 1e-5],
@@ -43,15 +33,15 @@ outcomes = 5
 covariance = covariance_types[1]  # None/spher
 
 epochs = 3
-log_step = 10
+log_step = 1000
 
-batch_size = 4
+batch_size = 10
 
 lr_max = 1e-5
 lr_min = 1e-6
 scheduler = scheduler_types[0]
 
-val_size = 100
+val_size = 50  # samples/users if -vu
 threshold = 100
 
 train_size = 0
@@ -87,7 +77,6 @@ def main():
     parser.add_argument('-us', '--usa_model', action="store_true", help="Use USA model instead of worldwide (default: False)")
     parser.add_argument('-d', '--dataset', type=str, default=dataset_file, help="Input dataset (in jsonl format)")
     parser.add_argument('-f', '--features', default=features, nargs='+', help="Features names")
-    # parser.add_argument('-f', '--feature', type=str, default=features, help="Feature column name")
     parser.add_argument('-ts', '--train_size', type=int, default=train_size, help='Training dataloader size')
     parser.add_argument('-tr', '--test_ratio', type=float, default=test_ratio, help='Training dataloader test ratio (default: 0.1)')
     parser.add_argument('-s', '--seed', type=int, default=seed, help='Random seed (default: 42)')
@@ -95,17 +84,13 @@ def main():
     parser.add_argument('-th', '--threshold', type=int, default=threshold, help='Validation threshold in km (default: 200)')
     parser.add_argument('-vu', '--val_user', action="store_true", help="Form validation dataset by user (default: False)")
 
-    # parser.add_argument('-po', '--pred_output', type=str, default=output_pred, help='Output file for predictions (in jsonl format)')
-    # parser.add_argument('-mo', '--map_output', type=str, default=output_map, help='Output file for map plot')
-    # parser.add_argument('-do', '--dist_output', type=str, default=output_dist, help='Output file for distribution plot')
-
     parser.add_argument('--train', action="store_true", help="Start pretraining")
     parser.add_argument('--eval', action="store_true", help="Start evaluation")
     parser.add_argument('--hptune', action="store_true", help="Start training with hyper parameters tuning")
     args = parser.parse_args()
 
     if args.local_model is None:
-        prefix = f"EIS-{'U-' if not args.scale_coord else ''}{'+'.join(args.features)}-O{args.outcomes}-{'d' if  args.loss_dist else 'c'}-" \
+        prefix = f"US-{'U-' if not args.scale_coord else ''}{'+'.join(args.features)}-O{args.outcomes}-{'d' if  args.loss_dist else 'c'}-" \
                  f"total_{args.loss_total if args.covariance is not None else 'type'}-{'mf_' + args.loss_mf + '-' if len(args.features) > 1 else ''}" \
                  f"{args.loss_prob + '_' if args.covariance is not None else ''}{args.covariance if args.covariance is not None else 'NP'}-" \
                  f"{'weighted-' if args.weighted and args.outcomes > 1 else ''}N{args.train_size//100000}e5-" \
@@ -155,7 +140,7 @@ def main():
     #                       args.log_step)
 
     if args.train:
-        trainer.pretrain(args.train_size,
+        trainer.finetune(args.train_size,
                          args.test_ratio,
                          f"{prefix}.pth",
                          args.nockp,

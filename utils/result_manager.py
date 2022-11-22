@@ -231,13 +231,11 @@ class ResultManager():
 
         self.means = means
         self.dists = dists
-        if self.outcomes > 1:
-            self.weights = weights
-        if self.prob:
-            self.covs = covs
+        self.weights = weights if self.outcomes > 1 else None
+        self.covs = covs if self.prob else None
 
         print(f"VAL\tLOAD\tDataset of {self.size} samples is loaded")
-        if sorting:
+        if sorting and self.outcomes > 1:
             self.sort_outcomes()
 
         if self.outcomes == 1:
@@ -362,6 +360,7 @@ class ResultManager():
     def result_metrics(self, best=True, threshold=100):
         print(f"Calculating spatial {'and probabilistic ' if self.prob else ''}metrics "
               f"for {self.size} result samples {'per user' if self.by_user else 'per tweet'}")
+
         aed, med, mse, mae, acc, acc161 = self.spatial_metric(threshold, best)
         spat_metric = [["Average SAE", aed],
                       ["Median SAE", med],
@@ -380,15 +379,25 @@ class ResultManager():
         else:
             prob_metric = []
 
-        metric = spat_metric + prob_metric
-        self.performance_df = pd.DataFrame(metric, columns=["metric", "value"])
+        out = "BEST" if best else f"ALL {self.outcomes}"
+        return [["Outcome", out]] + spat_metric + prob_metric
+
+    def performance(self, save=True):
+        best_metric = self.result_metrics(True)
+        self.performance_df = pd.DataFrame(best_metric, columns=["metric", "value"])
+
+        if self.outcomes > 1:
+            all_metric = self.result_metrics(False)
+            self.performance_df = self.performance_df.append(pd.DataFrame(all_metric, columns=["metric", "value"]), ignore_index=True)
+
         self.performance_df['metric'] = self.performance_df['metric'].apply(lambda x: "{:<20}".format(x))
 
-        filename = f"results/val-data/{self.prefix}_metric_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
+        if save:
+            filename = f"results/metric/{self.prefix}_metric_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
 
-        with open(filename, "w") as f:
-            self.performance_df.to_csv(f, header=False, index=False, sep="\t", mode="a")
-        print(f"VAL\tSAVE\tPerformance metrics of {self.size} samples are written to file: {filename}")
+            with open(filename, "w") as f:
+                self.performance_df.to_csv(f, header=False, index=False, sep="\t", mode="a")
+            print(f"VAL\tSAVE\tPerformance metrics of {self.size} samples are written to file: {filename}")
 
     # sort per-tweet outcomes by their weights
     def sort_outcomes(self):

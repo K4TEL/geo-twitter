@@ -394,7 +394,6 @@ class ResultVisuals():
 
             if self.outcomes > 1:
                 for i in range(self.outcomes):
-                    # if np.round(self.manager.weights[index, i] * 100, 2) > 0:
                     color = self.palette[i+1] if i < 5 else self.palette[5]
                     map_big.scatter(self.manager.means[index, i, 0],
                                     self.manager.means[index, i, 1],
@@ -437,22 +436,22 @@ class ResultVisuals():
 
             if self.outcomes > 1:
                 for i in range(self.outcomes):
-                    # if np.round(self.manager.weights[index, i] * 100, 2) > 0:
-                    color = self.palette[i+1] if i < 5 else self.palette[5]
-                    map_zoom.scatter(self.manager.means[index, i, 0],
-                                     self.manager.means[index, i, 1],
-                                     latlon=True,
-                                     label=f"Out {i+1}: { ', '.join(map(str, self.manager.means[index, i]))} - {round(self.manager.weights[index, i] * 100, 2)}%",
-                                     color=color,
-                                     s=max(1, 10 * self.manager.weights[index, i]),
-                                     zorder=9999)
-                    map_zoom.scatter(self.manager.means[index, i, 0],
-                                     self.manager.means[index, i, 1],
-                                     latlon=True,
-                                     color=color,
-                                     s=max(100, 1000 * self.manager.weights[index, i]),
-                                     alpha=0.2,
-                                     zorder=9999)
+                    if np.round(self.manager.weights[index, i] * 100, 2) > 0:
+                        color = self.palette[i+1] if i < 5 else self.palette[5]
+                        map_zoom.scatter(self.manager.means[index, i, 0],
+                                         self.manager.means[index, i, 1],
+                                         latlon=True,
+                                         label=f"Out {i+1}: { ', '.join(map(str, self.manager.means[index, i]))} - {round(self.manager.weights[index, i] * 100, 2)}%",
+                                         color=color,
+                                         s=max(1, 10 * self.manager.weights[index, i]),
+                                         zorder=9999)
+                        map_zoom.scatter(self.manager.means[index, i, 0],
+                                         self.manager.means[index, i, 1],
+                                         latlon=True,
+                                         color=color,
+                                         s=max(100, 1000 * self.manager.weights[index, i]),
+                                         alpha=0.2,
+                                         zorder=9999)
             else:
                 map_zoom.scatter(self.manager.means[index, 0],
                                  self.manager.means[index, 1],
