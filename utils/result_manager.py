@@ -23,10 +23,15 @@ def GaussianWeights(weights):
 
 
 # GMM complete
-def get_gm_family(means, sigma, weights):
+def get_gm_family(outcomes, means, sigma, weights):
+    means, sigma = means.reshape(outcomes, 2), sigma.reshape(outcomes, 2, 2)
     gaussian = GaussianModel(means, sigma)
-    gmm_weights = GaussianWeights(weights)
-    return dist.MixtureSameFamily(gmm_weights, gaussian)
+    if weights is not None:
+        gmm_weights = GaussianWeights(weights.reshape(-1))
+        gm = dist.MixtureSameFamily(gmm_weights, gaussian)
+    else:
+        gm = gaussian
+    return gm
 
 
 # Haversine distance to the genuine truth in km for PRA metrics (outliers set to map borders)
@@ -382,6 +387,7 @@ class ResultManager():
         out = "BEST" if best else f"ALL {self.outcomes}"
         return [["Outcome", out]] + spat_metric + prob_metric
 
+    # full performance measure of the model
     def performance(self, save=True):
         best_metric = self.result_metrics(True)
         self.performance_df = pd.DataFrame(best_metric, columns=["metric", "value"])

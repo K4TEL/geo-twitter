@@ -11,7 +11,7 @@ ww_models = {
     "pmop": "U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]"
 }
 
-outcomes = 5
+outcomes = 1
 prob = False
 features = ["NON-GEO", "GEO-ONLY"]
 text_example = "CIA and FBI can track anyone, and you willingly give the data away"

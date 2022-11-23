@@ -68,9 +68,8 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
     if samples > 1:
         Z_big, Z_big_exp = np.zeros_like(xxb).flatten(), np.zeros_like(xxb).flatten()
         for i in range(samples):
-            gmm = get_gm_family(means[i, :].reshape(outcomes, 2),
-                                covs[i, :].reshape(outcomes, 2, 2),
-                                weights[i, :].reshape(-1))
+            weights = weights[i, :] if outcomes > 1 else None
+            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], weights)
             Z_big += gmm.log_prob(torch.from_numpy(XX_big)).numpy()
             Z_big_exp += np.exp(gmm.log_prob(torch.from_numpy(XX_big)).numpy())
 
@@ -95,14 +94,16 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
         sig_weights = p_weights[ind].flatten()
 
     else:
-        gmm = get_gm_family(means.reshape(outcomes, 2),
-                            covs.reshape(outcomes, 2, 2),
-                            weights.reshape(-1))
+        gmm = get_gm_family(outcomes, means, covs, weights)
         Z_big = gmm.log_prob(torch.from_numpy(XX_big)).numpy()
 
-        ind = np.argwhere(np.round(weights * 100, 2) > 0)
-        significant = means[ind].reshape(-1, 2)
-        sig_weights = weights[ind].flatten()
+        if outcomes > 1:
+            ind = np.argwhere(np.round(weights * 100, 2) > 0)
+            significant = means[ind].reshape(-1, 2)
+            sig_weights = weights[ind].flatten()
+        else:
+            significant = means.reshape(-1, 2)
+            sig_weights = np.ones(1)
 
     for i in range(len(sig_weights)):
         weight = np.round(sig_weights[i] * 100, 2)
@@ -124,14 +125,11 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
     if samples > 1:
         Z_zoom = np.zeros_like(xxz).flatten()
         for i in range(samples):
-            gmm = get_gm_family(means[i, :].reshape(outcomes, 2),
-                                covs[i, :].reshape(outcomes, 2, 2),
-                                weights[i, :].reshape(-1))
+            weights = weights[i, :] if outcomes > 1 else None
+            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], weights)
             Z_zoom += np.exp(gmm.log_prob(torch.from_numpy(XX_zoom)).numpy())
     else:
-        gmm = get_gm_family(means.reshape(outcomes, 2),
-                            covs.reshape(outcomes, 2, 2),
-                            weights.reshape(-1))
+        gmm = get_gm_family(outcomes, means, covs, weights)
         Z_zoom = np.exp(gmm.log_prob(torch.from_numpy(XX_zoom)).numpy())
 
     Z_big, Z_zoom = Z_big.reshape(xxb.shape), Z_zoom.reshape(xxz.shape)
@@ -246,17 +244,11 @@ class ResultVisuals():
             ax.set_xlim(xmin, xmax)
             ax.set_ylim(ymin, ymax)
 
-            if self.outcomes > 1:
-                gmm = get_gm_family(self.manager.means[i, :].reshape(self.outcomes, 2),
-                                    self.manager.covs[i, :].reshape(self.outcomes, 2, 2),
-                                    self.manager.weights[i, :].reshape(-1))
-                Z = gmm.log_prob(torch.from_numpy(XX)).numpy()
-                gmm_lh = gmm.log_prob(torch.from_numpy(self.true[i, :])).numpy()
-            else:
-                gm = GaussianModel(self.manager.means[i, :].reshape(2),
-                                    self.manager.covs[i, :].reshape(2, 2))
-                Z = gm.log_prob(torch.from_numpy(XX)).numpy()
-                gmm_lh = gm.log_prob(torch.from_numpy(self.true[i, :])).numpy()
+            weights = self.manager.weights[i, :] if self.outcomes > 1 else None
+            gmm = get_gm_family(self.outcomes, self.manager.means[i, :], self.manager.covs[i, :], weights)
+
+            Z = gmm.log_prob(torch.from_numpy(XX)).numpy()
+            gmm_lh = gmm.log_prob(torch.from_numpy(self.true[i, :])).numpy()
 
             zmin = np.min(Z)
             zmax = np.max(Z)
@@ -355,7 +347,8 @@ class ResultVisuals():
             else:
                 filename = None
 
-            means, covs, weights = self.manager.means[0], self.manager.covs[0], self.manager.weights[0]
+            means, covs = self.manager.means[0], self.manager.covs[0]
+            weights = self.manager.weights[0] if self.outcomes > 1 else None
             plot_gmm(1, self.outcomes, means, covs, weights, self.cluster, title, filename, True)
         else:
 
@@ -369,8 +362,20 @@ class ResultVisuals():
             tick_labels_big_x, tick_labels_big_y = [str(x) for x in ticks_big_x], \
                                                    [str(y) for y in ticks_big_y]
 
-            ind = np.argwhere(np.round(self.manager.weights[index, :] * 100, 2) > 0)
-            significant = self.manager.means[index, ind].reshape(-1, 2)
+            if self.outcomes > 1:
+                ind = np.argwhere(np.round(self.manager.weights[index, :] * 100, 2) > 0)
+                significant = self.manager.means[index, ind].reshape(-1, 2)
+                sig_weights = self.manager.weights[index, ind].flatten()
+            else:
+                significant = self.manager.means.reshape(-1, 2)
+                sig_weights = np.ones(1)
+
+            for i in range(len(sig_weights)):
+                weight = np.round(sig_weights[i] * 100, 2)
+                point = f"lon: {'  lat: '.join(map(str, significant[i])) }"
+                if weight > 0:
+                    print(f"\tOut {i+1}\t{weight}%\t-\t{point}")
+
             margin_lon, margin_lat = 10, 5
             min_lon, max_lon = min(significant[:, 0]) - margin_lon, max(significant[:, 0]) + margin_lon
             min_lat, max_lat = min(significant[:, 1]) - margin_lat, max(significant[:, 1]) + margin_lat
@@ -460,7 +465,8 @@ class ResultVisuals():
                 map_zoom.scatter(self.manager.means[index, 0],
                                  self.manager.means[index, 1],
                                  latlon=True,
-                                 s=1000, c="black", alpha=0.2, zorder=9999)
+                                 label=f"Out 1: { ', '.join(map(str, self.manager.means))}",
+                                 s=100, c="black", alpha=0.2, zorder=9999)
 
             title = f'{self.prefix}\nscatter plots of {self.outcomes} points'
             if self.manager.text:

@@ -102,7 +102,7 @@ All output of the evaluation is stored in the **results** folder.
 
 ### Prediction
 
-**NOTE!** To run single text prediction you should place .pth finetuned model files in the **models** directory.
+**NOTE!** To run single text prediction you should place .pth finetuned model files in the **models/final** directory.
 
 To launch the prediction with default settings run:
 

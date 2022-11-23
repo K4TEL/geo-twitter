@@ -55,14 +55,8 @@ class ModelOutput():
 
             output = output.cpu().numpy() if torch.cuda.is_available() else output.numpy()
 
-        result = ResultManager(None, text, self.feature, self.device, self.benchmark, False, self.prefix)
+        result = ResultManager(None, text, self.feature, self.device, self.benchmark, False, False, self.prefix)
         result.soft_outputs(list([prob_model])) if self.cov else result.coord_outputs(output)
-
-        for i in range(self.outcomes):
-            weight = np.round(result.weights[0, i] * 100, 2)
-            point = f"lon: {'  lat: '.join(map(str, result.means[0, i])) }"
-            if weight > 0:
-                print(f"\tOut {i+1}\t{weight}%\t-\t{point}")
 
         visual = ResultVisuals(result)
         visual.text_map_result()
