@@ -35,13 +35,13 @@ covariance = covariance_types[1]  # None/spher
 epochs = 3
 log_step = 1000
 
-batch_size = 10
+batch_size = 4
 
 lr_max = 1e-5
 lr_min = 1e-6
 scheduler = scheduler_types[0]
 
-val_size = 50  # samples/users if -vu
+val_size = 10  # samples/users if -vu
 threshold = 100
 
 train_size = 0
@@ -90,7 +90,7 @@ def main():
     args = parser.parse_args()
 
     if args.local_model is None:
-        prefix = f"US-{'U-' if not args.scale_coord else ''}{'+'.join(args.features)}-O{args.outcomes}-{'d' if  args.loss_dist else 'c'}-" \
+        prefix = f"{'US-' if args.usa_model else ''}{'U-' if not args.scale_coord else ''}{'+'.join(args.features)}-O{args.outcomes}-{'d' if  args.loss_dist else 'c'}-" \
                  f"total_{args.loss_total if args.covariance is not None else 'type'}-{'mf_' + args.loss_mf + '-' if len(args.features) > 1 else ''}" \
                  f"{args.loss_prob + '_' if args.covariance is not None else ''}{args.covariance if args.covariance is not None else 'NP'}-" \
                  f"{'weighted-' if args.weighted and args.outcomes > 1 else ''}N{args.train_size//100000}e5-" \

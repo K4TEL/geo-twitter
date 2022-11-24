@@ -260,7 +260,7 @@ class ResultManager():
         if prefix is None:
             prefix = self.prefix
         if filename is None:
-            filename = f"results/val-data/{prefix}_predicted_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.jsonl"
+            filename = f"results/val-data/{prefix}_predicted_N{self.size}_{'U' if self.by_user else ''}VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.jsonl"
 
         with open(filename, "w") as f:
             self.df.to_json(f, orient='records', lines=True)
@@ -399,7 +399,7 @@ class ResultManager():
         self.performance_df['metric'] = self.performance_df['metric'].apply(lambda x: "{:<20}".format(x))
 
         if save:
-            filename = f"results/metric/{self.prefix}_metric_N{self.size}_VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
+            filename = f"results/metric/{self.prefix}_metric_N{self.size}_{'U' if self.by_user else ''}VF-{self.feature}_{datetime.today().strftime('%Y-%m-%d')}.txt"
 
             with open(filename, "w") as f:
                 self.performance_df.to_csv(f, header=False, index=False, sep="\t", mode="a")

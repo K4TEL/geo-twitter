@@ -62,16 +62,24 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
     tick_labels_big_x, tick_labels_big_y = [str(x) for x in ticks_big_x], \
                                            [str(y) for y in ticks_big_y]
 
-    xxb, yyb = map_grid(means[:, 0], 50) if samples > 1 else map_grid(means.reshape(-1, 2), 400)
+    total_peaks = means.reshape(-1, 2)
+    peaks_unique, ind = np.unique(np.round(total_peaks, 4), return_index=True, axis=0)
+    intergrid_peaks = total_peaks[ind]
+    print(f"Total number of GMM peaks {total_peaks.shape[0]} - {intergrid_peaks.shape[0]} unique to include")
+    grid_step = 50 if samples > 1 else 400
+    xxb, yyb = map_grid(intergrid_peaks, grid_step)
     XX_big = np.array([xxb.ravel(), yyb.ravel()]).T
 
     if samples > 1:
         Z_big, Z_big_exp = np.zeros_like(xxb).flatten(), np.zeros_like(xxb).flatten()
         for i in range(samples):
-            weights = weights[i, :] if outcomes > 1 else None
-            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], weights)
+            i_weights = weights[i, :] if outcomes > 1 else None
+            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], i_weights)
             Z_big += gmm.log_prob(torch.from_numpy(XX_big)).numpy()
             Z_big_exp += np.exp(gmm.log_prob(torch.from_numpy(XX_big)).numpy())
+
+        Z_big_exp = Z_big_exp / samples
+        Z_big = Z_big / samples
 
         Z = Z_big_exp.reshape(xxb.shape)
         local_max_indexes = np.where(1 == (Z == maximum_filter(Z, mode="nearest", size=(10, 10))))
@@ -87,6 +95,11 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
         ind_top_5 = (-max_Z_uni).argsort()[:top]
         peaks = max_XX_uni[ind_top_5]
         p_weights = softmax(max_Z_uni[ind_top_5])
+        for i in range(top):
+            pdf = np.round(max_Z_uni[ind_top_5][i], 5)
+            weight = np.round(p_weights[i] * 100, 2)
+            point = f"lon: {'  lat: '.join(map(str, peaks[i])) }"
+            print(f"\t{i}\t{weight}%\t-\t{point}\t-\t{pdf}")
 
         ind = np.argwhere(np.round(p_weights * 100, 2) > 0)
         print(f"Regressing to top {top} - {len(ind)} significant peaks")
@@ -125,9 +138,11 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
     if samples > 1:
         Z_zoom = np.zeros_like(xxz).flatten()
         for i in range(samples):
-            weights = weights[i, :] if outcomes > 1 else None
-            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], weights)
+            i_weights = weights[i, :] if outcomes > 1 else None
+            gmm = get_gm_family(outcomes, means[i, :], covs[i, :], i_weights)
             Z_zoom += np.exp(gmm.log_prob(torch.from_numpy(XX_zoom)).numpy())
+
+        Z_zoom = Z_zoom / samples
     else:
         gmm = get_gm_family(outcomes, means, covs, weights)
         Z_zoom = np.exp(gmm.log_prob(torch.from_numpy(XX_zoom)).numpy())
@@ -171,7 +186,7 @@ def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, 
     map_zoom.drawmeridians(np.arange(min_lon, max_lon, step_zoom), labels=tick_labels_zoom_x)
     map_zoom.fillcontinents(color='white', lake_color='lightgrey', zorder=1)
 
-    Z_zoom = np.ma.array(Z_zoom, mask=Z_zoom < 1e-5)
+    Z_zoom = np.ma.array(Z_zoom, mask=Z_zoom < 1e-8)
     contour_zoom = map_zoom.contourf(xxz, yyz, Z_zoom, levels=np.linspace(zzmin, zzmax, 250),
                                      cmap='Spectral_r', alpha=0.7, zorder=9, latlon=True)
     plt.colorbar(contour_zoom, ax=ax_zoom, orientation="horizontal", pad=0.2)
@@ -307,9 +322,12 @@ class ResultVisuals():
 
     def summarize_prediction(self, user_index=0, samples=100, save=True):
         user = self.df['USER-ONLY'].unique()[user_index]
-        ids = self.df.index[self.df['USER-ONLY'] == user].tolist()[0:samples]
+        ids = self.df.index[self.df['USER-ONLY'] == user].tolist()
+        if samples < len(ids):
+            ids = ids[0:samples]
         size = len(ids)
-        means, covs, weights = self.manager.means[ids], self.manager.covs[ids], self.manager.weights[ids]
+        means, covs = self.manager.means[ids], self.manager.covs[ids]
+        weights = self.manager.weights[ids] if self.outcomes > 1 else None
 
         title = f'{self.prefix}\nsummary of {size} tweet GMMs with {self.outcomes} means' \
                 f'\nUser: {user}'

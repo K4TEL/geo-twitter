@@ -53,9 +53,6 @@ class BERTregModel():
                 print(f"MODEL\tMinor feature\t{self.features[f]} outputs:\t{output}")
             self.feature_outputs[self.features[f]] = output
 
-        # config = BertRegressorConfig().from_pretrained(pretrained_model_name_or_path=self.original_model,
-        #                                                force_download=True)
-        # self.model = BertRegressor(config, self.original_model, self.feature_outputs)
         self.model = BertRegressor(self.original_model, self.feature_outputs)
 
 
@@ -76,36 +73,3 @@ class BertRegressor(nn.Module):
         else:
             outputs = self.minor_regressor(outputs[1])
         return outputs
-
-# hugging faces framework version for uploading
-#
-# class BertRegressorConfig(PretrainedConfig):
-#     def __init__(self, **kwargs):
-#         super(BertRegressorConfig, self).__init__(**kwargs)
-#
-#     # model_type = "bert-geo-regressor"
-# class BertGeoRegressor(PreTrainedModel):
-#     config_class = BertRegressorConfig
-#     base_model_prefix = "bert-base-multilingual-cased"
-#     def __init__(self, config):
-#         super(BertGeoRegressor, self).__init__(config)
-#         self.model = BertModel.from_pretrained("bert-base-multilingual-cased", return_dict=True)
-#
-#         self.regressor = nn.Linear(768, 20)
-#
-#     def forward(self, input_ids,
-#                 attention_mask,
-#                 token_type_ids = None,
-#                 position_ids = None,
-#                 head_mask = None,
-#                 inputs_embeds = None,
-#                 encoder_hidden_states = None,
-#                 encoder_attention_mask = None,
-#                 past_key_values = None,
-#                 use_cache = None,
-#                 output_attentions = None,
-#                 output_hidden_states = None,
-#                 return_dict = None):
-#         outputs = self.model(input_ids, attention_mask)
-#         outputs = self.regressor(outputs[1])
-#         return outputs

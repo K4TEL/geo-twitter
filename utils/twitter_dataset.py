@@ -60,8 +60,16 @@ def crop_dataset(data, size, seed):
     return data.drop(data.sample(n=size, random_state=seed).index, axis=0)
 
 
-def sample_users(data, users_n):
-    user_list = data['user'].value_counts()[:users_n].index.tolist()
+# sample users (bots filtering) for evaluation
+def sample_users(data, users_n, bot_filter=True, min_total=10, max_day=50):
+    if bot_filter and "time" in data.columns:
+        data['time'] = pd.to_datetime(data['time'], utc=False).dt.date
+        user_tweets_per_day = data.groupby(['time'])['user'].value_counts()
+        user_tweets = user_tweets_per_day[user_tweets_per_day < max_day].droplevel(0).groupby(["user"]).sum()
+    else:
+        user_tweets = data['user'].value_counts()
+
+    user_list = user_tweets[user_tweets > min_total].sample(n=users_n, random_state=42).index.tolist()
     return data[data['user'].isin(user_list)]
 
 
@@ -157,7 +165,7 @@ class TwitterDataloader():
 
         print(f"DATASET\tForming validation dataset of {size} {'users' if by_user else 'samples'} with batch size {batch_size} for {self.val_feature} text feature")
         if by_user:
-            self.val_df = sample_users(self.data, size)
+            self.val_df = sample_users(self.data, size).copy()
             self.features += ["USER-ONLY"]
             print(f"DATASET\tSize of the validation dataset with {size} users: {len(self.val_df.index)} samples")
         else:
