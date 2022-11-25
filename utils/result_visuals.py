@@ -1,51 +1,27 @@
-import pandas as pd
-import numpy as np
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
-from mpl_toolkits.axes_grid1.inset_locator import mark_inset
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
-import matplotlib.ticker as ticker
-from matplotlib.colors import ListedColormap, BoundaryNorm, LogNorm
+from matplotlib.colors import LogNorm
+from mpl_toolkits.basemap import Basemap
+
 import seaborn as sns
+
 import plotly.graph_objects as go
 from pathlib import Path
-from datetime import datetime
-from mpl_toolkits.basemap import Basemap
-from matplotlib.colors import LinearSegmentedColormap
-from scipy.stats import norm, multivariate_normal
-import scipy.sparse as sparse
-from sklearn.mixture import GaussianMixture
-from sklearn.mixture._gaussian_mixture import _compute_precision_cholesky
-from scipy.linalg import cholesky
-from scipy.ndimage.filters import maximum_filter
+
 from scipy.special import softmax
-import imageio
+
 import os
 import shutil
-import moviepy.editor as mp
+
+import imageio
 from moviepy.editor import *
 
-from utils.regressor import *
-from utils.benchmarks import *
 from utils.result_manager import *
 
 # visualization of evaluation results
 
 
 def plot_gmm(samples, outcomes, means, covs, weights, cluster, title, filename, save=True):
-    def map_grid(peaks, step=200):
-        xmin, xmax = -180, 180
-        ymin, ymax = -90, 90
-        x = np.linspace(xmin, xmax, step)
-        y = np.linspace(ymin, ymax, step)
-        x = np.concatenate((x, peaks[:, 0]), axis=0)
-        x = np.sort(x)
-        y = np.concatenate((y, peaks[:, 1]), axis=0)
-        y = np.sort(y)
-        xx, yy = np.meshgrid(x, y)
-        return xx, yy
-
     palette = {1: 'darkgreen',
                 2: 'goldenrod',
                 3: 'darkorange',
@@ -511,8 +487,10 @@ class ResultVisuals():
             if self.weighted:
                 label += f" w = {round(self.df[f'O{i+1}_weight'].median(), 5)};"
 
+            color = self.palette[i+1] if i < 5 else self.palette[5]
+
             sns.kdeplot(self.df[f'O{i+1}_dist'], ax=ax, label=label, bw_adjust=.5,
-                         color=self.palette[i+1], linewidth=2, fill=True, alpha=0.1)
+                         color=color, linewidth=2, fill=True, alpha=0.1)
 
         box = ax.get_position()
         ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
@@ -563,17 +541,18 @@ class ResultVisuals():
                 label = f"{i+1}: distance = {round(self.df[f'O{i+1}_dist'].mean())} km; "
                 if self.weighted:
                     label += f" weight = {round(self.df[f'O{i+1}_weight'].mean(), 5)};"
+                color = self.palette[i+1] if i < 5 else self.palette[5]
 
-                sns.ecdfplot(self.df, x=f'O{i+1}_dist', ax=ax, label=label, color=self.palette[i+1], lw=2)
+                sns.ecdfplot(self.df, x=f'O{i+1}_dist', ax=ax, label=label, color=color, lw=2)
 
                 prop = self.df[f'O{i+1}_dist'][self.df[f'O{i+1}_dist'] < threshold].count() / self.size
-                plt.axhline(prop, color=self.palette[i+1], lw=1)
+                plt.axhline(prop, color=color, lw=1)
                 if prop > 0:
-                    plt.text(1, prop + 0.005, f"{round(prop * 100, 2)}%", color=self.palette[i+1], fontweight="bold")
+                    plt.text(1, prop + 0.005, f"{round(prop * 100, 2)}%", color=color, fontweight="bold")
 
                 x, y = ax.lines[i*2].get_data()
-                ax.fill_between(x, y, where=y <= prop, color=self.palette[i+1], alpha=0.1, hatch='xx')
-                ax.fill_between(x, 0, prop, where=y >= prop, color=self.palette[i+1], alpha=0.1, hatch='xx')
+                ax.fill_between(x, y, where=y <= prop, color=color, alpha=0.1, hatch='xx')
+                ax.fill_between(x, 0, prop, where=y >= prop, color=color, alpha=0.1, hatch='xx')
             plt.axvline(threshold, color="red", linestyle='dashed', lw="1")
             plt.text(threshold, -0.03, f"{threshold}km", color="red", fontweight="bold")
 
@@ -594,82 +573,114 @@ class ResultVisuals():
             plt.show()
 
     # distance error lines on the map
-    def interact_lines(self, size=500, scope="world", save=True):
+    def interactive_map(self, lines=True, best=False, size=1000, scope="world", save=True):
+        size = min(self.size, size)
         self.df = self.df.sample(n=size, random_state=42, ignore_index=True)
         self.size = len(self.df.index)
 
         fig = go.Figure()
 
-        fig.add_trace(
-            go.Scattergeo(
-                lon=self.df["longitude"],
-                lat=self.df["latitude"],
-                mode='markers',
-                marker=dict(
-                    size=2,
-                    color='rgb(0, 0, 0)',
-                    line=dict(
-                        width=3,
-                        color='rgba(68, 68, 68, 0)'
-                    )
-                )
-            )
-        )
+        # true points
+        fig.add_trace(go.Scattergeo(
+            lon=self.df["lon"], lat=self.df["lat"], mode='markers',
+            marker=dict(
+                size=2,
+                color='rgb(0, 0, 0)',
+            )))
 
+        lon, lat, dist = [], [], []
         for o in range(self.outcomes):
-            lon, lat = [], []
+            if best and o > 1:
+                continue
             for i in range(self.size):
                 lon.append(np.array(self.df.loc[i, f"O{o+1}_point"])[0])
                 lat.append(np.array(self.df.loc[i, f"O{o+1}_point"])[1])
+                dist.append(self.df.loc[i, f"O{o+1}_dist"])
 
-            fig.add_trace(
-                go.Scattergeo(
-                    lon=lon,
-                    lat=lat,
-                    mode='markers',
-                    marker=dict(
-                        size=2,
-                        color='rgb(0, 0, 0)',
-                        line=dict(
-                            width=3,
-                            color='rgba(68, 68, 68, 0)'
+        if lines:
+            # outcome points
+            fig.add_trace(go.Scattergeo(
+                lon=lon, lat=lat, mode='markers',
+                marker=dict(
+                    size=2,
+                    color="black"
+                )
+            ))
+            # outcome lines
+            for o in range(self.outcomes):
+                if best and o > 1:
+                    continue
+                color = self.palette[o+1] if o < 5 else self.palette[5]
+                for i in range(self.size):
+                    fig.add_trace(go.Scattergeo(
+                            lon=[self.df["lon"][i], np.array(self.df.loc[i, f"O{o+1}_point"])[0]],
+                            lat=[self.df["lat"][i], np.array(self.df.loc[i, f"O{o+1}_point"])[1]],
+                            mode='lines',
+                            line=dict(
+                                width=1,
+                                color=color,
+                            ),
+                            hovertext=f'Distance: {round(self.df[f"O{o+1}_dist"][i], 2)} km'
+                                      f'<br>{self.df[self.feature][i]}',
+                            hoverinfo="name+text+lon+lat",
+                            name="", opacity=0.5
                         )
                     )
-                )
+
+            fig.update_layout(
+                title_text=f'{self.prefix}<br>'
+                           f'Error in distance between original and predicted geo locations of<br>'
+                           f'{self.size} samples on {scope} scope, from model validated on {self.feature} feature',
+                showlegend=False,
+                geo=dict(
+                    scope=scope,
+                    projection_type='natural earth',
+                    showland=True,
+                    landcolor='rgb(243, 243, 243)',
+                    countrycolor='rgb(204, 204, 204)',
+                ),
+            )
+        else:
+            min_dist = np.log10(1e-10)
+            max_dist = np.log10(20100)
+
+            # outcome points
+            fig.add_trace(go.Scattergeo(
+                lon=lon, lat=lat, mode='markers',
+                marker=dict(
+                    size=5,
+                    color=np.log10(dist),
+                    colorscale="RdYlGn",
+                    reversescale=True,
+                    cmin=max_dist,
+                    cmax=min_dist,
+                    colorbar=dict(
+                        orientation="h",
+                        title="Log distance",
+                        y=-0.1
+                    )
+                ),
+                name="",
+                hovertext=dist,
+                hoverinfo="name+text+lon+lat",
+            ))
+
+            fig.update_layout(
+                coloraxis_colorbar=dict(
+                    title="Distance"),
+                title_text=f'{self.prefix}<br>'
+                           f'Error in distance between original and predicted geo locations of<br>'
+                           f'{self.size} samples on {scope} scope, from model validated on {self.feature} feature',
+                showlegend=False,
+                geo=dict(
+                    scope=scope,
+                    projection_type='natural earth',
+                    showland=True,
+                    landcolor='rgb(243, 243, 243)',
+                    countrycolor='rgb(204, 204, 204)',
+                ),
             )
 
-            for i in range(self.size):
-                fig.add_trace(
-                    go.Scattergeo(
-                        lon=[self.df["longitude"][i], np.array(self.df.loc[i, f"O{o+1}_point"])[0]],
-                        lat=[self.df["latitude"][i], np.array(self.df.loc[i, f"O{o+1}_point"])[1]],
-                        mode='lines',
-                        hovertext=f'Feature: {self.feature}\t\t'
-                                  f'Distance: {round(self.df["O1_dist"][i], 2)} km'
-                                  f'<br>{self.df["clear_text"][i]}',
-                        hoverinfo="name+text+lon+lat",
-                        name="",
-                        line=dict(
-                            width=1,
-                            color=self.palette[o+1]
-                        ),
-                        opacity=0.5
-                    )
-                )
-
-        fig.update_layout(
-            title_text=f'{self.prefix}<br>'
-                       f'Error in distance between original and predicted geo locations of<br>'
-                       f'{self.size} samples on {scope} scope, from model validated on {self.feature} feature',
-            showlegend=False,
-            geo=dict(
-                scope=scope,
-                projection_type='natural earth',
-                showland=True,
-                landcolor='rgb(243, 243, 243)',
-                countrycolor='rgb(204, 204, 204)',
-            ),
-        )
 
         fig.update_geos(
             lataxis_showgrid=True, lonaxis_showgrid=True,
@@ -678,10 +689,6 @@ class ResultVisuals():
         )
 
         if save:
-            # filename = f"results/img/{datetime.today().strftime('%Y-%m-%d')}_{self.feature}_map_{self.size}.png"
-            # fig.write_image(filename)
-            # print(f"VAL\tSAVE\tMap plot of {self.size} samples is drawn to file: {filename}")
-
             filename = f"results/map-html/intermap_{self.prefix}_N{self.size}_{datetime.today().strftime('%Y-%m-%d')}.html"
             fig.write_html(filename)
             print(f"VAL\tSAVE\tMap plot of {self.size} samples is drawn to file: {filename}")

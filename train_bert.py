@@ -41,7 +41,7 @@ lr_max = 1e-5
 lr_min = 1e-6
 scheduler = scheduler_types[0]
 
-val_size = 10  # samples/users if -vu
+val_size = 1000  # samples/users if -vu
 threshold = 100
 
 train_size = 0

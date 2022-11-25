@@ -1,11 +1,15 @@
 import numpy as np
-import os
-import string
 import pandas as pd
+
 import torch
-import re
 from torch.utils.data import TensorDataset, DataLoader
+
+import string
+import re
+import os
+
 from sklearn.model_selection import train_test_split
+
 import GPUtil
 import psutil
 
@@ -61,7 +65,7 @@ def crop_dataset(data, size, seed):
 
 
 # sample users (bots filtering) for evaluation
-def sample_users(data, users_n, bot_filter=True, min_total=10, max_day=50):
+def sample_users(data, users_n, bot_filter=True, min_total=10, max_day=50, seed=42):
     if bot_filter and "time" in data.columns:
         data['time'] = pd.to_datetime(data['time'], utc=False).dt.date
         user_tweets_per_day = data.groupby(['time'])['user'].value_counts()
@@ -69,7 +73,7 @@ def sample_users(data, users_n, bot_filter=True, min_total=10, max_day=50):
     else:
         user_tweets = data['user'].value_counts()
 
-    user_list = user_tweets[user_tweets > min_total].sample(n=users_n, random_state=42).index.tolist()
+    user_list = user_tweets[user_tweets > min_total].sample(n=users_n, random_state=seed).index.tolist()
     return data[data['user'].isin(user_list)]
 
 
@@ -165,7 +169,7 @@ class TwitterDataloader():
 
         print(f"DATASET\tForming validation dataset of {size} {'users' if by_user else 'samples'} with batch size {batch_size} for {self.val_feature} text feature")
         if by_user:
-            self.val_df = sample_users(self.data, size).copy()
+            self.val_df = sample_users(self.data, size, seed=self.seed).copy()
             self.features += ["USER-ONLY"]
             print(f"DATASET\tSize of the validation dataset with {size} users: {len(self.val_df.index)} samples")
         else:

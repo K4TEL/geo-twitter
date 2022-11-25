@@ -5,7 +5,7 @@ import torch
 # results manager and visual test on evaluated datasets
 
 feature = "NON-GEO"
-file = f"U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N218_VF-NON-GEO_2022-11-24"
+file = f"U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N1000_VF-NON-GEO_2022-11-25"
 
 input_pred = f"results/val-data/{file}.jsonl"
 
@@ -23,7 +23,7 @@ else:
 
 bert_wrapper = BERTregModel(n_outcomes=5, covariance="spher", weighted=True, features=["NON-GEO", "GEO-ONLY"])
 model = ModelBenchmark(bert_wrapper, distance=True, loss_prob="pos", mf_loss="mean", total_loss="mean")
-result = ResultManager(None, None, feature, device, model, scaled=False, by_user=True, prefix=file)
+result = ResultManager(None, None, feature, device, model, scaled=False, by_user=False, prefix=file)
 result.load_df(input_pred)
 
 # metrics
@@ -36,14 +36,16 @@ visual = ResultVisuals(result)
 
 # standard
 # visual.density()
-# visual.cum_dist(False, 200)
+# visual.cum_dist(False, 100)
 
 # GMM
-visual.summarize_prediction(1)
+# visual.summarize_prediction(1)
 # visual.gaus_map()
 # visual.prob_map_animation(228)
 
-# visual.save_df()
+visual.interactive_map(lines=False, best=True)
+
+# result.save_df()
 
 
 
