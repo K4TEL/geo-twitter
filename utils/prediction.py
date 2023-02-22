@@ -28,7 +28,10 @@ class ModelOutput():
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
         self.benchmark = ModelBenchmark(wrapper, True, "pos", "mean", "mean" if self.cov else "type")
 
-    def prediction_output(self, text, filtering=True):
+        self.result = None
+        self.visual = None
+
+    def prediction_output(self, text, filtering=True, visual=False):
         if filtering:
             text = nlp_filtering(text)
             print(f"TEXT\tFiltered text: {text}")
@@ -55,8 +58,11 @@ class ModelOutput():
 
             output = output.cpu().numpy() if torch.cuda.is_available() else output.numpy()
 
-        result = ResultManager(None, text, self.feature, self.device, self.benchmark, False, False, self.prefix)
-        result.soft_outputs(list([prob_model])) if self.cov else result.coord_outputs(output)
+        self.result = ResultManager(None, text, self.feature, self.device, self.benchmark, False, False, self.prefix)
+        self.result.soft_outputs(list([prob_model])) if self.cov else self.result.coord_outputs(output)
 
-        visual = ResultVisuals(result)
-        visual.text_map_result()
+        if visual:
+            self.visual = ResultVisuals(self.result)
+            self.visual.text_map_result()
+
+        return self.result

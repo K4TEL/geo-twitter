@@ -200,7 +200,11 @@ class ResultManager():
             self.df = pd.DataFrame()
             self.size = 1
             self.true = np.array([])
-            self.dists = None
+
+        self.means = None
+        self.dists = None
+        self.weights = None
+        self.covs = None
 
     # load evaluation results df to class entities
     def load_df(self, filename, sorting=True):

@@ -5,14 +5,14 @@ from utils.regressor import *
 # Entry point for prediction from text (model .pth files needed)
 
 ww_models = {
-    "gsop": "U-NON-GEO+GEO-ONLY-O1-d-total_type-mf_mean-NP-N30e5-B10-E3-cosine-LR[1e-05;1e-06]",
-    "gmop": "U-NON-GEO+GEO-ONLY-O5-d-total_type-mf_mean-NP-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]",
-    "psop": "U-NON-GEO+GEO-ONLY-O1-d-total_mean-mf_mean-pos_spher-N30e5-B10-E3-cosine-LR[1e-05;1e-06]",
-    "pmop": "U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]"
+    "gsop": "G-NON-GEO+GEO-ONLY-O1",
+    "gmop": "G-NON-GEO+GEO-ONLY-O5",
+    "psop": "P-NON-GEO+GEO-ONLY-O1",
+    "pmop": "P-NON-GEO+GEO-ONLY-O5"
 }
 
-outcomes = 1
-prob = False
+outcomes = 5  # 1 or 5
+prob = True
 features = ["NON-GEO", "GEO-ONLY"]
 text_example = "CIA and FBI can track anyone, and you willingly give the data away"
 
@@ -38,13 +38,30 @@ def main():
     prediction = ModelOutput(BERTregModel(args.outcomes, covariance, weighted, features), prefix)
     print(f"MODEL\tBERT geo regression model is ready, you can now predict location from the text (300 words max) "
           f"in a form of {'Gaussian distributions (lon, lat, cov)' if prob else 'coordinates (lon, lat)'}"
-          f" with {outcomes} possible prediction outcomes.\nNOTE\tOutcomes what have very low weight won't be displayed")
+          f" with {outcomes} possible prediction outcomes.\nNOTE\tOutcomes that have very low weight won't be displayed")
 
     text = args.text if args.text else input("Insert text: ")
-    if len(text.split()) < 300:
-        prediction.prediction_output(text)
-    else:
-        print(f"Number of words is above 300, unable to process.")
+    while text != "exit":
+        if len(text.split()) < 300:
+            prediction.prediction_output(text)
+
+            if outcomes > 1:
+                ind = np.argwhere(np.round(prediction.result.weights[0, :] * 100, 2) > 0)
+                significant = prediction.result.means[0, ind].reshape(-1, 2)
+                sig_weights = prediction.result.weights[0, ind].flatten()
+            else:
+                significant = prediction.result.means.reshape(-1, 2)
+                sig_weights = np.ones(1)
+
+            for i in range(len(sig_weights)):
+                weight = np.round(sig_weights[i] * 100, 2)
+                point = f"lon: {'  lat: '.join(map(str, significant[i]))}"
+                if weight > 0:
+                    print(f"\tOut {i + 1}\t{weight}%\t-\t{point}")
+        else:
+            print(f"Number of words is above 300, unable to process.")
+
+        text = args.text if args.text else input("Insert text: ")
 
 
 if __name__ == "__main__":
