@@ -3,9 +3,11 @@ from utils.regressor import *
 import torch
 
 # results manager and visual test on evaluated datasets
+ww = "bert-base-multilingual-cased"
+us = "bert-base-cased"
 
 feature = "NON-GEO"
-file = f"U-NON-GEO+GEO-ONLY-O5-d-total_mean-mf_mean-pos_spher-weighted-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N1000_VF-NON-GEO_2022-11-25"
+file = f"U-NON-GEO+GEO-ONLY-O1-d-total_mean-mf_mean-pos_spher-N30e5-B10-E3-cosine-LR[1e-05;1e-06]_predicted_N300000_VF-NON-GEO_2023-02-19"
 
 input_pred = f"results/val-data/{file}.jsonl"
 
@@ -21,7 +23,7 @@ else:
     print(f"No GPU available, using the CPU with {torch.get_num_threads()} threads instead.")
     device = torch.device("cpu")
 
-bert_wrapper = BERTregModel(n_outcomes=5, covariance="spher", weighted=True, features=["NON-GEO", "GEO-ONLY"])
+bert_wrapper = BERTregModel(n_outcomes=1, covariance="spher", weighted=False, features=["NON-GEO", "GEO-ONLY"], model_name=ww)
 model = ModelBenchmark(bert_wrapper, distance=True, loss_prob="pos", mf_loss="mean", total_loss="mean")
 result = ResultManager(None, None, feature, device, model, scaled=False, by_user=False, prefix=file)
 result.load_df(input_pred)
@@ -30,20 +32,20 @@ result.load_df(input_pred)
 # result.result_metrics(True, 100)
 # result.result_metrics(False, 100)
 
-# result.performance()
+result.performance()
 
-visual = ResultVisuals(result)
+# visual = ResultVisuals(result)
 
 # standard
 # visual.density()
-# visual.cum_dist(False, 100)
+# visual.cum_dist(False, 161)
 
 # GMM
 # visual.summarize_prediction(1)
 # visual.gaus_map()
 # visual.prob_map_animation(228)
 
-visual.interactive_map(lines=False, best=True)
+# visual.interactive_map(lines=False, best=True)
 
 # result.save_df()
 

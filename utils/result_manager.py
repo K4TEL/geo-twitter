@@ -407,12 +407,16 @@ class ResultManager():
             if any(i > 1 for i in counts):
                 user_true = values[np.argmax(counts)]
             else:
-                time = self.df.loc[self.df.index[ids], 'time']
+                time = self.df.loc[self.df.index[ids], 'date']
                 user_true = self.df.loc[self.df.index[time.idxmin()], ['lon', "lat"]].to_numpy()
             self.user_true[u] = user_true
 
             user_samples = len(ids)
-            user_peaks = self.means[ids].reshape(-1, 2)
+            # print(user_samples, users[u])
+            if user_samples > 1000:
+                # print("skip")
+                continue
+            user_peaks = self.means[ids].reshape(-1, 2) if self.outcomes == 1 else self.means[ids, 0, :].reshape(-1, 2)
             peaks_unique, ind = np.unique(np.round(user_peaks, 4), return_index=True, axis=0)
             xx, yy = map_grid(user_peaks[ind], 10)
             XX = np.array([xx.ravel(), yy.ravel()]).T
@@ -476,6 +480,8 @@ class ResultManager():
 
         if self.outputs_map["weight"]:
             self.weights = weights(torch.from_numpy(predicted), self.outcomes, self.outputs_map).numpy()
+        else:
+            self.weights = None
 
         if self.true.size > 0:
             self.dists = self.distances(self.means)
@@ -538,6 +544,8 @@ class ResultManager():
         if self.outcomes > 1:
             self.weights = weights
             self.sort_outcomes()
+        else:
+            self.weights = None
 
         if self.df.size > 0:
             prob_models_df = pd.DataFrame({column: pd.Series(dtype=type) for column, type in self.pred_columns.items()})

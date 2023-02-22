@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 import os, glob
 
+country_codes = ["CA", "GB", "FR"]
 
 def parse_geo(obj):
     print(obj['coordinates']["coordinates"])
@@ -76,6 +77,8 @@ def parse_train(fid):
             continue
         if not obj["place"]:
             continue
+        # if obj["place"]["country_code"] not in country_codes:
+        #     continue
         if not obj["user"]:
             continue
 

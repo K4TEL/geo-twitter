@@ -7,6 +7,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import string
 import re
 import os
+import datetime
 
 from sklearn.model_selection import train_test_split
 
@@ -20,7 +21,7 @@ def load_jsonl(filename):
     filename = f"datasets/{filename}"
     print(f"DATASET\tLOAD: {psutil.virtual_memory().percent}%\tLoading dataset from {filename}")
     data = pd.read_json(path_or_buf=filename, lines=True)
-    print(f"DATASET\tLOAD: {psutil.virtual_memory().percent}%\tDataset of {len(data.index)} samples is loaded")
+    print(f"DATASET\tLOAD: {psutil.virtual_memory().percent}%\tDataset of {len(data.index)} samples and {len(data.user.unique())} users is loaded")
     return data
 
 
@@ -33,7 +34,40 @@ def save_df(df, filename, prefix=None):
 
     with open(save_filename, "w") as f:
         df.to_json(f, orient='records', lines=True)
-    print(f"DATASET\tSAVE\tTwitter Dataset of {size} samples is written to file: {filename}")
+    print(f"DATASET\tSAVE\tTwitter Dataset of {size} samples is written to file: {save_filename}")
+
+
+def combine_datasets(file_list, filename, prefix=None):
+    if prefix is None:
+        prefix = "td-"
+
+    df  = load_jsonl(file_list[0])
+    for file in file_list[1:]:
+        data = load_jsonl(file)
+        df = df.append(data, ignore_index=True)
+
+    save_df(df, filename, prefix)
+
+
+def filter_bots(data, min_total=10, max_day=50):
+    print(f"DATASET\tFiltering dataset of {len(data['user'].unique())} users from bots posting more than {max_day} tweets per day")
+    if "time" in data.columns:
+        data['date'] = pd.to_datetime(data['time'], utc=False).dt.date
+        user_tweets_per_day = data.groupby(['date'])['user'].value_counts()
+        user_tweets = user_tweets_per_day[user_tweets_per_day < max_day].droplevel(0).groupby(["user"]).sum()
+    else:
+        user_tweets = data['user'].value_counts()
+
+    # data["time"] = data['time'].apply(lambda x: datetime.datetime.combine(x, datetime.time.min).timestamp())
+    data['date'] = data['time'].apply(lambda x: datetime.datetime.strptime(x, '%a %b %d %H:%M:%S %z %Y').timestamp())
+    # data.drop("date", axis=1, inplace=True)
+    data["date"] = data["date"].astype(float)
+
+    user_list = user_tweets[user_tweets > min_total].index.tolist()
+    data = data[data['user'].isin(user_list)]
+
+    print(f"DATASET\tSize of the filtered dataset with {len(data['user'].unique())} users: {len(data.index)} samples")
+    return data
 
 
 # text preprocessing
@@ -59,21 +93,36 @@ def create_dataloader(inputs, masks, labels, batch_size, shuffle=False):
 
 
 # crop dataset to remove already used data before random sampling
-def crop_dataset(data, size, seed):
-    print(f"DATASET\tCropping dataset of {len(data.index)} in {size} samples with seed {seed}")
-    return data.drop(data.sample(n=size, random_state=seed).index, axis=0)
+def crop_dataset(data, size, seed, by_user=False, ref_file=None, save=False):
+    print(f"DATASET\tCropping dataset of {len(data.index)} in {size} samples with seed {seed}{' including uniqie users' if by_user else ''}")
+    if by_user:
+        if ref_file:
+            df = load_jsonl(ref_file)
+            crop_data = df.sample(n=size, random_state=seed)
+        else:
+            crop_data = data.sample(n=size, random_state=seed)
+            data = data.drop(crop_data.index, axis=0)
+
+        crop_users = crop_data["user"].unique()
+
+        print(f"DATASET\tUnique users to crop: {len(crop_users)}")
+        data = data[-data["user"].isin(crop_users)]
+        print(f"DATASET\tUnique users left: {len(data['user'].unique())}")
+    else:
+        crop_data = data.sample(n=size, random_state=seed)
+        data = data.drop(crop_data.index, axis=0)
+
+    if save and ref_file:
+        save_df(crop_data, ref_file, "train-")
+
+    print(f"DATASET\tReduced dataset lenght is {len(data.index)}")
+    return data
 
 
 # sample users (bots filtering) for evaluation
-def sample_users(data, users_n, bot_filter=True, min_total=10, max_day=50, seed=42):
-    if bot_filter and "time" in data.columns:
-        data['time'] = pd.to_datetime(data['time'], utc=False).dt.date
-        user_tweets_per_day = data.groupby(['time'])['user'].value_counts()
-        user_tweets = user_tweets_per_day[user_tweets_per_day < max_day].droplevel(0).groupby(["user"]).sum()
-    else:
-        user_tweets = data['user'].value_counts()
-
-    user_list = user_tweets[user_tweets > min_total].sample(n=users_n, random_state=seed).index.tolist()
+def sample_users(data, users_n, seed=42):
+    user_tweets = data['user'].value_counts()
+    user_list = user_tweets.sample(n=users_n, random_state=seed).index.tolist()
     return data[data['user'].isin(user_list)]
 
 
@@ -88,6 +137,9 @@ class TwitterDataloader():
                                       'texts': 'text'}, inplace=True)
             self.data.to_json(f"datasets/{self.filename}", orient='records', lines=True)
             print(self.data.info())
+
+        #self.data = filter_bots(self.data)
+        #save_df(self.data, self.filename, "filtered-")
 
         self.target = target
 
@@ -157,24 +209,29 @@ class TwitterDataloader():
     def form_training(self, batch_size, size, test_ratio, skip_size=0, shuffle=True):
         if skip_size > 0:
             self.data = crop_dataset(self.data, skip_size, self.seed)
+
         print(f"DATASET\tForming training dataset of {size} samples with test size {int(test_ratio*size)} for features: {', '.join(self.features)}")
         train_df = self.data.sample(n=size, random_state=self.seed).copy()
         del self.data
         train_df = self.feature_split_filter(train_df)
         self.create_feature_dataloaders(train_df, True, batch_size, shuffle, test_ratio)
 
-    def form_validation(self, batch_size, size, by_user=False, skip_size=0):
+    def form_validation(self, batch_size, size, by_user=False, skip_size=0, ref_train_file=None):
         if skip_size > 0:
-            self.data = crop_dataset(self.data, skip_size, self.seed)
+            self.data = crop_dataset(self.data, skip_size, self.seed, by_user, ref_train_file, True)
+
+#        self.data = filter_bots(self.data)
+        save_df(self.data, self.filename, "test-")
 
         print(f"DATASET\tForming validation dataset of {size} {'users' if by_user else 'samples'} with batch size {batch_size} for {self.val_feature} text feature")
         if by_user:
             self.val_df = sample_users(self.data, size, seed=self.seed).copy()
             self.features += ["USER-ONLY"]
-            print(f"DATASET\tSize of the validation dataset with {size} users: {len(self.val_df.index)} samples")
         else:
             self.val_df = self.data.sample(n=size, random_state=self.seed).copy()
         del self.data
+
+        print(f"DATASET\tSize of the validation dataset with {len(self.val_df['user'].unique())} users: {len(self.val_df.index)} samples")
 
         self.val_df = self.feature_split_filter(self.val_df)
         self.create_feature_dataloaders(self.val_df, False, batch_size)

@@ -240,14 +240,14 @@ class ModelTrainer():
         return val_metric, pm
 
     # evaluation entry point
-    def eval(self, val_size, threshold=200, map_size=1000, by_user=False, skip_size=0):
+    def eval(self, val_size, threshold=200, map_size=1000, by_user=False, skip_size=0, ref_file=None):
         if map_size > val_size:
             map_size = val_size
 
         print(f"\nStarting evaluation for model {self.model_file}")
         self.load_local_model()
 
-        self.data.form_validation(self.batch_size, val_size, by_user, skip_size)
+        self.data.form_validation(self.batch_size, val_size, by_user, skip_size, ref_file)
         val_size = len(self.data.val_dataloader.dataset)
 
         print(f"\nCalculating result metrics for {val_size} samples")
