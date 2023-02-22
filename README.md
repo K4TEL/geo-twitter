@@ -30,8 +30,8 @@ Additional:
 
 - **scripts appendix** - folder containing testing and development python scripts, and bash scripts for running jobs on a cluster with slurm management system 
 
-- `valid_map.py` - shortcut for results management and visualization
-- `data_collector.py` - parsing of Twitter database files to collect dataset files
+- `valid_data.py` - shortcut for results management and visualization
+- `collector.py` - parsing of Twitter database files to collect dataset files
 
 ## Usage/Examples
 
