@@ -22,7 +22,7 @@ This project is aimed to solve the tweet/user geolocation prediction task and pr
     - `model_trainer.py` - training and evaluation of the models
 
 - `train_bert.py` - command line parameters input, entry point for training and evaluation
-- `input_entry.py` - entry point for single text prediction
+- `input_entry.py` - entry point for single text prediction using local or HF repository models
 
 Additional:
 

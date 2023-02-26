@@ -1,12 +1,10 @@
 import torch.nn as nn
-from transformers import BertModel, PreTrainedModel, AutoConfig, PretrainedConfig
+from transformers import BertModel, BertPreTrainedModel, BertConfig
 
-# model wrapper
+# general model wrapper
 # linear regression fork for features and preset outputs
-
-
 class BERTregModel():
-    def __init__(self, n_outcomes=1, covariance=None, weighted=False, features=None, model_name=None):
+    def __init__(self, n_outcomes=1, covariance=None, weighted=False, features=None, base_model_name=None, hub_model=None):
         self.n_outcomes = n_outcomes
         self.cov = covariance
         self.weighted = weighted
@@ -37,8 +35,9 @@ class BERTregModel():
             self.cov_output = self.covariances[self.cov]
             print(f"MODEL\tCovariances:\t{self.cov_output}\tmatrix type:\t{self.cov}")
 
-        self.original_model = "bert-base-multilingual-cased" if model_name is None else model_name
+        self.original_model = "bert-base-multilingual-cased" if base_model_name is None else base_model_name
         print(f"MODEL\tOriginal model to load:\t{self.original_model}")
+
         self.key_output = self.coord_output + self.weights_output + self.cov_output
         self.minor_output = 2
         self.minor_output += 1 if self.cov_output > 0 else 0
@@ -53,9 +52,16 @@ class BERTregModel():
                 print(f"MODEL\tMinor feature\t{self.features[f]} outputs:\t{output}")
             self.feature_outputs[self.features[f]] = output
 
-        self.model = BertRegressor(self.original_model, self.feature_outputs)
+        if hub_model:
+            self.model = GeoBertModel(BertConfig.from_pretrained(self.original_model), self.feature_outputs)
+            print(f"LOAD\tLoading HF model from {hub_model}")
+            self.model = self.model.from_pretrained(hub_model, self.feature_outputs)
+        else:
+            self.model = BertRegressor(self.original_model, self.feature_outputs)
 
 
+
+# Train model wrapper layer
 class BertRegressor(nn.Module):
     def __init__(self, model_name, feature_outputs):
         super(BertRegressor, self).__init__()
@@ -73,3 +79,24 @@ class BertRegressor(nn.Module):
         else:
             outputs = self.minor_regressor(outputs[1])
         return outputs
+
+
+# HF model wrapper layer
+class GeoBertModel(BertPreTrainedModel):
+    def __init__(self, config, feature_outputs):
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.feature_outputs = feature_outputs
+
+        self.key_regressor = nn.Linear(config.hidden_size, list(self.feature_outputs.values())[0])
+        if len(self.feature_outputs) > 1:
+            self.minor_regressor = nn.Linear(config.hidden_size, list(self.feature_outputs.values())[1])
+
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, feature_name=None):
+        outputs = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, position_ids=position_ids, head_mask=head_mask)
+        pooler_output = outputs[1]
+        if feature_name is None or feature_name == list(self.feature_outputs.keys())[0]:
+            custom_output = self.key_regressor(pooler_output)
+        else:
+            custom_output = self.minor_regressor(pooler_output)
+        return custom_output
