@@ -1,0 +1,24 @@
+Outcome             	BEST
+Average SAE         	118.96837800851797
+Median SAE          	17.5024042712
+MSE                 	16.143209358759403
+MAE                 	1.5657629981299996
+Acc@100             	93.0
+Acc@161             	93.0
+Average CAE         	151.89993443774924
+Median CAE          	53.5580648326241
+Average 95% PRA     	5.035829398679516
+Median 95% PRA      	3.018119173570053
+PRA COVerage        	0.19
+Outcome             	ALL 5
+Average SAE         	119.66019497129344
+Median SAE          	17.810982220624744
+MSE                 	16.20156407447996
+MAE                 	0.7875519863563727
+Acc@100             	92.0
+Acc@161             	93.0
+Average CAE         	166.96709316134712
+Median CAE          	62.70323179974559
+Average 95% PRA     	10.792423280458388
+Median 95% PRA      	8.531194419025953
+PRA COVerage        	0.3
