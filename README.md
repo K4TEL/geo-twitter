@@ -7,7 +7,8 @@ This project is aimed to solve the tweet/user geolocation prediction task and pr
 
 The project structure reduced to classes and function required to run a single-text prediction using HF repo model and process the outputs.
 
-`text_result.py` - loading model from the HF repo and post-processing outputs of a single text prediction 
+- `text_result.py` - loading model from the HF repo and post-processing outputs of a single text prediction 
+- `prediction.ipynb` - Jupyter Notebook to load and perform prediction
 
 ## Usage/Examples
 

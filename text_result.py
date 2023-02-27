@@ -407,16 +407,17 @@ class ResultVisuals():
             self.plot_scatter(means, weights, title)
 
 
-# load HF model
-def load(hub_model, base_model, cov="spher"):
-    model_wrapper = BERTregModel(5, cov, base_model, hub_model)
+def main():
+    hub_model = 'k4tel/geo-bert-multilingual'
+    base_model = "bert-base-multilingual-cased"
+
+    model_wrapper = BERTregModel(5, "spher", base_model, hub_model)
     tokenizer = BertTokenizer.from_pretrained(hub_model)
-    return model_wrapper, tokenizer
 
+    text = "CIA and FBI can track anyone, and you willingly give the data away"
 
-# use HF model to predict location for text
-def predict(model_wrapper, tokenizer, text):
-    result = ResultManager(text, "NON-GEO", torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"), model_wrapper, hub_model)
+    result = ResultManager(text, "NON-GEO", torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+                           model_wrapper, hub_model)
     model = model_wrapper.model
 
     inputs = tokenizer(text, return_tensors="pt")
@@ -439,19 +440,6 @@ def predict(model_wrapper, tokenizer, text):
     for i in range(len(sig_weights)):
         point = f"lon: {'  lat: '.join(map(str, significant[i]))}"
         print(f"\tOut {i + 1}\t{sig_weights[i]}%\t-\t{point}")
-
-    return result
-
-
-def main():
-    hub_model = 'k4tel/geo-bert-multilingual'
-    base_model = "bert-base-multilingual-cased"
-
-    model, tokenizer = load(hub_model, base_model)
-
-    text = "CIA and FBI can track anyone, and you willingly give the data away"
-
-    result = predict(model, tokenizer, text)
 
     visual = ResultVisuals(result)
     visual.text_map_result()
