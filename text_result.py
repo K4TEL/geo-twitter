@@ -4,16 +4,24 @@ from mpl_toolkits.basemap import Basemap
 import math
 import torch
 import torch.distributions as dist
+
 import numpy as np
+import pandas as pd
 
 import torch.nn as nn
 from transformers import BertModel, BertPreTrainedModel, BertConfig, BertTokenizer
+
+import string
+import re
+
+from transformers import Pipeline, pipeline
+from transformers.pipelines import PIPELINE_REGISTRY
 
 
 # general model wrapper
 # linear regression fork for features and preset outputs
 class BERTregModel():
-    def __init__(self, n_outcomes=5, covariance="spher", base_model_name=None, hub_model=None):
+    def __init__(self, n_outcomes=5, covariance="spher", base_model_name=None):
         self.n_outcomes = n_outcomes
         self.cov = covariance
         self.features = ["NON-GEO", "GEO-ONLY"]
@@ -52,10 +60,16 @@ class BERTregModel():
                 print(f"MODEL\tMinor feature\t{self.features[f]} outputs:\t{output}")
             self.feature_outputs[self.features[f]] = output
 
+        self.outputs_map = {
+            "coord": [0, self.coord_output],
+            "weight": [self.coord_output,
+                       self.coord_output + self.weights_output],
+            "sigma": [self.coord_output + self.weights_output,
+                      self.coord_output + self.weights_output + self.cov_output] if self.cov else None
+        }
+
         self.model = GeoBertModel(BertConfig.from_pretrained(self.original_model), self.feature_outputs)
-        if hub_model:
-            print(f"LOAD\tLoading HF model from {hub_model}")
-            self.model = self.model.from_pretrained(hub_model, self.feature_outputs)
+        self.tokenizer = BertTokenizer.from_pretrained(self.original_model)
 
 
 # HF model wrapper layer
@@ -79,6 +93,86 @@ class GeoBertModel(BertPreTrainedModel):
         return custom_output
 
 
+# torch.nn.Softplus() in munpy
+def softplus(x, threshold=20):
+    x_clipped = np.clip(x, -threshold, threshold)
+    result = np.log(1 + np.exp(x_clipped))
+    result[x > threshold] = x[x > threshold]
+    return result + (1 / (2 * np.pi))
+
+
+# torch.nn.Softmax() in munpy
+def softmax(x, axis=-1):
+    x_max = np.max(x, axis=axis, keepdims=True)
+    x_exp = np.exp(x - x_max)
+    x_sum = np.sum(x_exp, axis=axis, keepdims=True)
+    return x_exp / x_sum
+
+
+# filtering
+def filter_text(text):
+    print(f"TEXT\tFiltering text: {text}")
+    pattern = r'http\S+'
+    text = re.sub(pattern, '', text)
+    text = "".join([i for i in text if i not in string.punctuation])
+    return text
+
+
+# custom HF pipeline
+class GeoRegressorPipeline(Pipeline):
+    def _sanitize_parameters(self, **kwargs):
+        preprocess_kwargs = {}
+        if "filter" in kwargs:
+            preprocess_kwargs["filter"] = kwargs["filter"]
+
+        postprocess_kwargs = {}
+        if "outputs_map" in kwargs:
+            postprocess_kwargs["outputs_map"] = kwargs["outputs_map"]
+
+        return preprocess_kwargs, {}, postprocess_kwargs
+
+    def preprocess(self, text, filter=True):
+        text = filter_text(text) if filter else text
+        return self.tokenizer(text, return_tensors=self.framework)
+
+    def _forward(self, model_inputs):
+        return self.model(**model_inputs)
+
+    def postprocess(self, model_outputs, outputs_map=None):
+        print(f"RESULT\tPost-processing raw model outputs: {model_outputs}")
+        model_outputs = model_outputs.numpy() if self.device == "cpu" else model_outputs.cpu().numpy()
+
+        outcomes = outputs_map["weight"][1] - outputs_map["weight"][0]
+
+        P = model_outputs[0, outputs_map["coord"][0]:outputs_map["coord"][1]]
+        means = P.reshape([outcomes, 2])
+
+        W = model_outputs[0, outputs_map["weight"][0]:outputs_map["weight"][1]]
+        weights = softmax(W, axis=0).reshape(outcomes)
+
+        if outputs_map["sigma"]:
+            S = model_outputs[0, outputs_map["sigma"][0]:outputs_map["sigma"][1]]
+            S = softplus(S)
+            sigma = np.eye(2).reshape(1, 2, 2) * S.reshape(-1, 1, 1)
+            covs = sigma.reshape([outcomes, 2, 2])
+
+        print(f"RESULT\tSorting all outputs for {outcomes} outcomes by probabilistic weights")
+        sort_indexes = np.argsort(weights)
+        index = sort_indexes[::-1]
+
+        means, weights = means[index], weights[index]
+        if outputs_map["sigma"]:
+            covs = covs[index]
+
+        result = []
+        for i in range(5):
+            result.append({"point": means[i],
+                           "weight": weights[i],
+                           "cov": covs[i] if outputs_map["sigma"] else None})
+
+        return result
+
+
 # result manager
 class ResultManager():
     def __init__(self, text, feature, device, model, prefix=None):
@@ -92,14 +186,7 @@ class ResultManager():
 
         self.outcomes = self.model.n_outcomes
         self.cov = self.model.cov
-
-        self.outputs_map = {
-            "coord": [0, self.model.coord_output],
-            "weight": [self.model.coord_output,
-                       self.model.coord_output + self.model.weights_output],
-            "sigma": [self.model.coord_output + self.model.weights_output,
-                      self.model.coord_output + self.model.weights_output + self.model.cov_output] if self.cov else None
-        }
+        self.outputs_map = self.model.outputs_map
 
         self.prob = self.cov is not None
 
@@ -110,7 +197,6 @@ class ResultManager():
         self.means = None
         self.weights = None
         self.covs = None
-
 
     # sort per-tweet outcomes by their weights
     def sort_outcomes(self):
@@ -123,9 +209,9 @@ class ResultManager():
         if self.prob:
             self.covs[0] = self.covs[0, index]
 
-
-    # raw outputs to params
+    # raw model outputs to params
     def raw_to_params(self, predicted):
+        print(f"RESULT\tPost-processing raw model outputs: {predicted}")
         P = predicted[0, self.outputs_map["coord"][0]:self.outputs_map["coord"][1]]
         means = P.reshape(self.size, self.outcomes, 2)
         self.means = means.cpu().numpy() if self.cluster else means.numpy()
@@ -144,11 +230,23 @@ class ResultManager():
 
         self.sort_outcomes()
 
+    # pipeline result to params
+    def pipeline_to_params(self, result_dict):
+        self.means = np.zeros((1, self.outcomes, 2), float)
+        self.weights = np.zeros((1, self.outcomes), float)
+        self.covs = np.zeros((1, self.outcomes, 2, 2), float) if self.prob else None
+
+        for i in range(self.outcomes):
+            self.means[0, i, :] = result_dict[i]["point"]
+            self.weights[0, i] = result_dict[i]["weight"]
+            if self.prob:
+                self.covs[0, i, :] = result_dict[i]["cov"]
+
 
 # GMM
-def dist_gmm(outcomes, means, sigma, weights):
-    means, sigma = means.reshape(outcomes, 2), sigma.reshape(outcomes, 2, 2)
-    gaussian = dist.MultivariateNormal(torch.from_numpy(means), torch.from_numpy(sigma))
+def dist_gmm(outcomes, means, covs, weights):
+    means, covs = means.reshape(outcomes, 2), covs.reshape(outcomes, 2, 2)
+    gaussian = dist.MultivariateNormal(torch.from_numpy(means), torch.from_numpy(covs))
     gmm_weights = dist.Categorical(torch.from_numpy(weights.reshape(-1)))
     gmm = dist.MixtureSameFamily(gmm_weights, gaussian)
     return gmm
@@ -188,7 +286,6 @@ class ResultVisuals():
                         3: 'darkorange',
                         4: 'crimson',
                         5: 'darkred'}
-
 
     # scatter plots
     def plot_scatter(self, means, weights, title):
@@ -281,7 +378,6 @@ class ResultVisuals():
         plt.suptitle(title)
 
         plt.show()
-
 
     # GMM plots
     def plot_gmm(self, means, covs, weights, title):
@@ -408,39 +504,91 @@ class ResultVisuals():
             self.plot_scatter(means, weights, title)
 
 
+# load model or model pipeline
+def load_model(base_model, hub_model, use_pipeline=True):
+    model_wrapper = BERTregModel(5, "spher", base_model)
+    model_wrapper.tokenizer = BertTokenizer.from_pretrained(hub_model)
+    model_wrapper.prefix = hub_model
+
+    if use_pipeline:
+        PIPELINE_REGISTRY.register_pipeline(
+            "geo-regressor",
+            pipeline_class=GeoRegressorPipeline,
+            pt_model=GeoBertModel,
+            default={"pt": (hub_model, "main")},
+            type="text",
+        )
+
+        print(f"LOAD\tLoading HF model from {hub_model}")
+        model_wrapper.pipeline = pipeline("geo-regressor",
+                                          model=hub_model,
+                                          tokenizer=model_wrapper.tokenizer,
+                                          device="cuda" if torch.cuda.is_available() else "cpu",
+                                          outputs_map=model_wrapper.outputs_map,
+                                          filter=filter,
+                                          model_kwargs={"feature_outputs": model_wrapper.feature_outputs})
+    else:
+        print(f"LOAD\tLoading HF model from {hub_model}")
+        model_wrapper.model = model_wrapper.model.from_pretrained(hub_model, model_wrapper.feature_outputs)
+    return model_wrapper
+
+
+# get prediction result for a single text
+def text_prediction(model_wrapper, text, use_pipeline=True, filter=True):
+    result = ResultManager(text, "NON-GEO", torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+                           model_wrapper, model_wrapper.prefix)
+    if use_pipeline:
+        outputs = model_wrapper.pipeline(text, filter=filter)
+        result.pipeline_to_params(outputs)
+    else:
+        text = filter_text(text) if filter else text
+        inputs = model_wrapper.tokenizer(text, return_tensors="pt")
+
+        with torch.no_grad():
+            outputs = model_wrapper.model(**inputs)
+        result.raw_to_params(outputs)
+
+    return result
+
+
+# get the most probable location predicted for a union of columns in pandas df
+def df_prediction(model_wrapper, df, target_columns_list, use_pipeline=True, filter=True):
+    input_col = "raw_input"
+
+    def row_predict(row):
+        result = text_prediction(model_wrapper, row[input_col], use_pipeline, filter)
+        return tuple(result.means[0, 1])
+
+    df[input_col] = df[target_columns_list].apply(lambda x: ' '.join(x), axis=1)
+    df["location"] = df.apply(row_predict, axis=1)
+    df.drop(input_col, axis=1, inplace=True)
+
+    return df
+
+
 def main():
     hub_model = 'k4tel/geo-bert-multilingual'
     base_model = "bert-base-multilingual-cased"
+    use_pipeline = True
 
-    model_wrapper = BERTregModel(5, "spher", base_model, hub_model)
-    tokenizer = BertTokenizer.from_pretrained(hub_model)
+    model_wrapper = load_model(base_model, hub_model, use_pipeline)
 
     text = "CIA and FBI can track anyone, and you willingly give the data away"
+    filter = True
 
-    result = ResultManager(text, "NON-GEO", torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
-                           model_wrapper, hub_model)
-    model = model_wrapper.model
-
-    inputs = tokenizer(text, return_tensors="pt")
-
-    with torch.no_grad():
-        outputs = model(**inputs)
-
-    print(f"RESULT\tPost-processing raw model outputs: {outputs}")
-    result.raw_to_params(outputs)
+    result = text_prediction(model_wrapper, text, use_pipeline, filter)
 
     ind = np.argwhere(np.round(result.weights[0, :] * 100, 2) > 0)
     significant = result.means[0, ind].reshape(-1, 2)
     weights = result.weights[0, ind].flatten()
 
-    sig_weights = np.round(weights * 100, 2)
-    sig_weights = sig_weights[sig_weights > 0]
+    sig_weights = weights[weights > 0]
 
     print(f"RESULT\t{len(sig_weights)} significant prediction outcome(s):")
-
     for i in range(len(sig_weights)):
         point = f"lon: {'  lat: '.join(map(str, significant[i]))}"
-        print(f"\tOut {i + 1}\t{sig_weights[i]}%\t-\t{point}")
+        weight = str(np.round(sig_weights[i] * 100, 2))
+        print(f"\tOut {i + 1}\t{weight}%\t-\t{point}")
 
     # visual = ResultVisuals(result)
     # visual.text_map_result()

@@ -34,7 +34,7 @@ To launch the prediction with default settings run:
     python text_result.py
 ```
 
-The text is ought to be changed manually by changing the `text` variable in the script.
+The setup is ought to be changed manually by changing the content of `main()` function in the script. There are options to use a custom HF pipeline or manually process inputs and outputs. 
 
 ## Support
 
