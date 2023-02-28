@@ -119,8 +119,7 @@ class ResultManager():
         sort_indexes = np.argsort(self.weights[0])
         index = sort_indexes[::-1]
         self.means[0] = self.means[0, index]
-        if self.outcomes > 1:
-            self.weights[0] = self.weights[0, index]
+        self.weights[0] = self.weights[0, index]
         if self.prob:
             self.covs[0] = self.covs[0, index]
 
@@ -142,6 +141,8 @@ class ResultManager():
             sigma = torch.eye(2, device=predicted.device) * S.reshape(-1, 1)[:, None]
             covs = sigma.reshape([self.size, self.outcomes, 2, 2])
             self.covs = covs.cpu().numpy() if self.cluster else covs.numpy()
+
+        self.sort_outcomes()
 
 
 # GMM
@@ -441,8 +442,8 @@ def main():
         point = f"lon: {'  lat: '.join(map(str, significant[i]))}"
         print(f"\tOut {i + 1}\t{sig_weights[i]}%\t-\t{point}")
 
-    visual = ResultVisuals(result)
-    visual.text_map_result()
+    # visual = ResultVisuals(result)
+    # visual.text_map_result()
 
 
 if __name__ == "__main__":
