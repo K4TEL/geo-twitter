@@ -17,3 +17,5 @@ spacy==3.5.0
 torch==1.13.1
 tqdm==4.64.1
 transformers==4.26.0
+Basemap==1.3.6
+basemap-data-hires==1.3.2

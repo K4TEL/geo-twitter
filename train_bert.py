@@ -49,6 +49,7 @@ test_ratio = 0.1
 seed = 42
 
 ref_file = None #  "us-twitter-2020.jsonl"  # if not None exclude found users from the current data
+bot_filter = False
 
 
 def main():
@@ -117,7 +118,8 @@ def main():
                                    BertTokenizer.from_pretrained(original_model),
                                    args.seed,
                                    args.scale_coord,
-                                   val_f)
+                                   val_f,
+                                   bot_filter)
 
 #  no settings run to save filtered by condition dataset copy
 #    dataloader.filter_dataset("code", "US", None)

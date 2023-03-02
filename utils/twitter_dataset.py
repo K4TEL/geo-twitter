@@ -49,7 +49,7 @@ def combine_datasets(file_list, filename, prefix=None):
     save_df(df, filename, prefix)
 
 
-def filter_bots(data, min_total=10, max_day=50):
+def filter_bots(data, min_total=1, max_day=20):
     print(f"DATASET\tFiltering dataset of {len(data['user'].unique())} users from bots posting more than {max_day} tweets per day")
     if "time" in data.columns:
         data['date'] = pd.to_datetime(data['time'], utc=False).dt.date
@@ -127,7 +127,7 @@ def sample_users(data, users_n, seed=42):
 
 
 class TwitterDataloader():
-    def __init__(self, filename, features, target, tokenizer, seed=42, scaled=False, val_feature=None):
+    def __init__(self, filename, features, target, tokenizer, seed=42, scaled=False, val_feature=None, bot_filter=False):
         self.filename = filename
         self.data = load_jsonl(self.filename)
         if "texts" in self.data.columns:
@@ -138,8 +138,9 @@ class TwitterDataloader():
             self.data.to_json(f"datasets/{self.filename}", orient='records', lines=True)
             print(self.data.info())
 
-        #self.data = filter_bots(self.data)
-        #save_df(self.data, self.filename, "filtered-")
+        if bot_filter:
+            self.data = filter_bots(self.data)
+            save_df(self.data, self.filename, "filtered-")
 
         self.target = target
 
