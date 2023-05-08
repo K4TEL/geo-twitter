@@ -36,6 +36,10 @@ To launch the prediction with default settings run:
 
 The setup is ought to be changed manually by changing the content of `main()` function in the script. There are options to use a custom HF pipeline or manually process inputs and outputs. 
 
+### Google colab example
+
+[Google Colab notebook of the predication demo](https://colab.research.google.com/drive/1Nu9VMlPpsATxCyEge-sBBOwFZcqKHJfM?usp=sharing) is a copy of the `prediction.ipynb` and available to launch.
+
 ## Support
 
 For support, email lutsai.k@gmail.com
