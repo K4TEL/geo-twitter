@@ -3,6 +3,8 @@
 
 This project is aimed to solve the tweet/user geolocation prediction task and provide a flexible methodology for the geotagging of textual big data. The suggested approach implements neural networks for natural language processing (NLP) to estimate the location as coordinates (longitude, latitude) and two-dimensional Gaussian Mixture Models (GMMs). The scope of proposed models has been finetuned on a Twitter dataset using pretrained Bidirectional Encoder Representations from Transformers (BERT) as a base model. 
 
+[Predicting the Geolocation of Tweets Using BERT-Based Models Trained on Customized Data](https://arxiv.org/pdf/2303.07865.pdf) - paper pre-print 
+
 ## Project structure
 
 - **datasets** - source folder for the input dataset files used during training and evaluation. For correct reading, the format of the files should be .jsonl containing "lon", "lat", "text", "user" and "place" columns (JSON object fields).
