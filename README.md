@@ -3,7 +3,9 @@
 
 This project is aimed to solve the tweet/user geolocation prediction task and provide a flexible methodology for the geotagging of textual big data. The suggested approach implements neural networks for natural language processing (NLP) to estimate the location as coordinates (longitude, latitude) and two-dimensional Gaussian Mixture Models (GMMs). The scope of proposed models has been finetuned on a Twitter dataset using pretrained Bidirectional Encoder Representations from Transformers (BERT) as a base model. 
 
-[Predicting the Geolocation of Tweets Using BERT-Based Models Trained on Customized Data](https://arxiv.org/pdf/2303.07865.pdf) - paper pre-print 
+[Predicting the Geolocation of Tweets Using BERT-Based Models Trained on Customized Data](https://arxiv.org/pdf/2303.07865.pdf) - paper pre-print on arXiv 
+
+[geo-bert-multilingual](https://huggingface.co/k4tel/geo-bert-multilingual) - repository on HuggingFace of the best model (Probabilistic, 5 outcomes, NON-GEO + GEO-ONLY) trained on the worldwide Twitter dataset
 
 ## Project structure
 
@@ -51,7 +53,7 @@ pip install -r requirements.txt
 
 ### Training
 
-**NOTE!** To run finetuning training place dataset file (.jsonl) containing "lon", "lat", "text", "user" and "place" columns (JSON object fields) into the **datasets** folder. 
+**NOTE!** To run finetuning training place dataset file (.jsonl) containing "lon", "lat", "text", "user" and "place" columns (JSON object fields, no headers required) into the **datasets** folder. 
 Then change the dataset file name in `train_bert.py` manually or by passing `-d <dataset_filename>.jsonl` argument. 
 
 To launch the finetuning training with default hyperparameters run:
@@ -100,7 +102,7 @@ The visualization of error distance density and its cumulative distribution per 
 
 Using `valid_map.py` you can read saved predictions files and use visualization functions more easily.
 
-All output of the evaluation is stored in the **results** folder.
+All outputs of the evaluation are stored in the **results** folder.
 
 ### Prediction
 
