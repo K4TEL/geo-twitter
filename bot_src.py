@@ -7,7 +7,7 @@ import json
 
 from bert_predict import *
 
-BOT_TOKEN = "5635730275:AAH-L3q37x6HP_FVYoBf4KgWonkMXk9I3Kg"
+BOT_TOKEN = ""
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 PATH_TO_DB = "db.db"
 
