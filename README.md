@@ -1,45 +1,51 @@
 
-# Geolocation Prediction BERT model
+# Telegram bot of the Geolocation Prediction BERT model
 
-This project is aimed to solve the tweet/user geolocation prediction task and provide a flexible methodology for the geotagging of textual big data. The suggested approach implements neural networks for natural language processing (NLP) to estimate the location as coordinates (longitude, latitude) and two-dimensional Gaussian Mixture Models (GMMs). The scope of proposed models has been finetuned on a Twitter dataset using pretrained Bidirectional Encoder Representations from Transformers (BERT) as a base model. 
+This project is aimed to provide open access for Telegram users to use the developed geolocation prediction model. 
+The suggested approach implements neural networks for natural language processing (NLP) to estimate the location as two-dimensional Gaussian Mixture Models (GMMs). 
+The model has been finetuned on a worldwide Twitter dataset using pretrained Bidirectional Encoder Representations from Transformers (BERT) as a base model. 
 
 ## Project structure
 
-The project structure reduced to classes and function required to run a single-text prediction using HF repo model and process the outputs.
+The project structure was reduced to classes and functions required to run a single-text prediction using HF repo model and process the outputs.
+In addition, Telegram bot source code and Docker files to run it are added.
 
 - `text_result.py` - loading model from the HF repo and post-processing outputs of a single text prediction 
-- `prediction.ipynb` - Jupyter Notebook to load and perform prediction
+- `bot_src.py` - Telegram bot source code for processing user requests and logging into DB
+- `db.db` - database containing request & response logs
+- `buildDocker`- initializing a build of the Docker image
+- `Dockerfile`- Docker image building instructions
+- `runDocker`- running a Docker container based on the built image
+- `runBot`- creating a persistent tmux session to run a Docker container
 
 ## Usage/Examples
 
-To run the project locally you can clone this project with:
+To run the Telegram bot locally you can clone this project with:
 
 ```bash
-git clone -b predict https://github.com/K4TEL/geo-twitter.git
+git clone -b bot https://github.com/K4TEL/geo-twitter.git
 ```
 
-Then, in your python environment run:
+Make sure that Python 3.8 or later version is installed on your machine. Then, in the project directory run:
 
 ```bash
-pip install -r requirements.txt
+./buildDocker
 ```
 
-### Prediction
-
-**NOTE!** To run single text prediction HF repository model is loaded.
-
-To launch the prediction with default settings run:
+This will initialize the Docker image which will be used a base for the future container. 
+Then create a new tmux session by running:
 
 ```bash
-    python text_result.py
+./runBot
 ```
 
-The setup is ought to be changed manually by changing the content of `main()` function in the script. There are options to use a custom HF pipeline or manually process inputs and outputs. 
+Open Telegram and find bot [@geobertbot](https://t.me/geobertbot) to use the geolocation prediction model. 
+There are three commands available:
 
-### Google colab example
-
-[Google Colab notebook of the predication demo](https://colab.research.google.com/drive/1Nu9VMlPpsATxCyEge-sBBOwFZcqKHJfM?usp=sharing) is a copy of the `prediction.ipynb` and available to launch.
+- `/start` - start the bot 
+- `/info` - get information about the model
+- `/predict` _text_ - get prediction results in text and GMM plot forms
 
 ## Support
 
-For support, email lutsai.k@gmail.com
+For support, email lutsai.k@gmail.com or message in Telegram @K4TEL
