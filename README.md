@@ -17,7 +17,7 @@ This project is aimed to solve the tweet/user geolocation prediction task and pr
 
 - **utils** - folder containing vital utility python classes
     - `benchmark.py` - loss function computation and Tensorboard log of training metrics
-    - `scheduler.py` - [Cyclic Cosine Decay Learning Rate Scheduler](https://github.com/abhuse/cyclic-cosine-decay)
+    - `cosine_scheduler.py` - [Cyclic Cosine Decay Learning Rate Scheduler](https://github.com/abhuse/cyclic-cosine-decay)
     - `twitter_dataset.py` - dataset wrapper class implements features forming, tokenization, and creation of PyTorch dataloaders
     - `regressor.py` - linear regression wrapper layer for BERT base models
     - `result_manager.py` - postprocessing of model outputs, writing and reading of evaluation results .jsonl files, performance metrics computation
@@ -32,7 +32,7 @@ Additional:
 
 - **runs** - folder for storing training Tensorboard log files 
 
-- **scripts appendix** - folder containing testing and development python scripts, and bash scripts for running jobs on a cluster with slurm management system 
+- **supplementary_resources** - folder containing testing and development python scripts, and bash scripts for running jobs on a cluster with slurm management system 
 
 - `valid_data.py` - shortcut for results management and visualization
 - `collector.py` - parsing of Twitter database files to collect dataset files
